@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { Plus, ExternalLink, User, BookOpen } from 'lucide-react'
+import { Plus, ExternalLink, User, BookOpen, FileText } from 'lucide-react'
 
 import { classesApi, type Class } from '../../lib/api'
 import { Button } from '@/components/ui/button'
@@ -97,55 +97,69 @@ function ClassCard({ classData }: { classData: Class }) {
   const hasLinks = Object.keys(classData.links_json || {}).length > 0
 
   return (
-    <div className="glass-card p-5 space-y-4 relative overflow-hidden">
-      {/* Color indicator */}
-      {classData.color && (
-        <div
-          className="absolute top-0 left-0 w-1 h-full"
-          style={{ backgroundColor: classData.color }}
-        />
-      )}
-
-      <div className="space-y-2">
-        {/* Code badge */}
-        {classData.code && (
-          <Badge variant="secondary" className="text-xs lowercase">
-            {classData.code}
-          </Badge>
+    <Link
+      to="/dashboard/classes/$classId"
+      params={{ classId: classData.id }}
+      className="block"
+    >
+      <div className="glass-card p-5 space-y-4 relative overflow-hidden cursor-pointer">
+        {/* Color indicator */}
+        {classData.color && (
+          <div
+            className="absolute top-0 left-0 w-1 h-full"
+            style={{ backgroundColor: classData.color }}
+          />
         )}
 
-        {/* Name */}
-        <h3 className="text-lg font-semibold text-foreground leading-tight lowercase">
-          {classData.name}
-        </h3>
+        <div className="space-y-2">
+          {/* Code badge */}
+          {classData.code && (
+            <Badge variant="secondary" className="text-xs lowercase">
+              {classData.code}
+            </Badge>
+          )}
 
-        {/* Instructor */}
-        {classData.instructor && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <User className="w-4 h-4" />
-            <span className="lowercase">{classData.instructor}</span>
+          {/* Name */}
+          <h3 className="text-lg font-semibold text-foreground leading-tight lowercase">
+            {classData.name}
+          </h3>
+
+          {/* Instructor */}
+          {classData.instructor && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <User className="w-4 h-4" />
+              <span className="lowercase">{classData.instructor}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Links */}
+        {hasLinks && (
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(classData.links_json).map(([key, url]) => (
+              <span
+                key={key}
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  window.open(url, '_blank')
+                }}
+                className="inline-flex items-center gap-1 text-xs text-accent hover:text-accent/80 transition-colors cursor-pointer"
+              >
+                <ExternalLink className="w-3 h-3" />
+                {formatLinkLabel(key)}
+              </span>
+            ))}
           </div>
         )}
-      </div>
 
-      {/* Links */}
-      {hasLinks && (
-        <div className="flex flex-wrap gap-2">
-          {Object.entries(classData.links_json).map(([key, url]) => (
-            <a
-              key={key}
-              href={url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-xs text-accent hover:text-accent/80 transition-colors"
-            >
-              <ExternalLink className="w-3 h-3" />
-              {formatLinkLabel(key)}
-            </a>
-          ))}
+        {/* Notes indicator */}
+        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+          <FileText className="w-3 h-3" />
+          <span>view notes</span>
         </div>
-      )}
-    </div>
+      </div>
+    </Link>
   )
 }
 

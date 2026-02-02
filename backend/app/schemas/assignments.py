@@ -4,13 +4,14 @@ from datetime import date, datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import Field, model_validator
+from pydantic import Field
 
 from app.schemas.base import BaseSchema
 
 # Type aliases for enums (used as literals for API validation)
 AssignmentStatusType = Literal["not_started", "in_progress", "done"]
 AssignmentTypeType = Literal["pset", "reading", "project", "quiz", "other"]
+DayOfWeekType = Literal["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
 
 
 class AssignmentBase(BaseSchema):
@@ -19,18 +20,10 @@ class AssignmentBase(BaseSchema):
     title: str = Field(..., min_length=1, max_length=255)
     type: AssignmentTypeType = "other"
     due_date: date | None = None
-    planned_start_date: date | None = None
+    planned_start_day: DayOfWeekType | None = None
     estimated_minutes: int | None = Field(None, gt=0)
     status: AssignmentStatusType = "not_started"
     notes_short: str | None = None
-
-    @model_validator(mode="after")
-    def validate_dates(self) -> "AssignmentBase":
-        """Ensure planned_start_date <= due_date if both are set."""
-        if self.planned_start_date and self.due_date:
-            if self.planned_start_date > self.due_date:
-                raise ValueError("planned_start_date must be on or before due_date")
-        return self
 
 
 class AssignmentCreate(AssignmentBase):
@@ -56,7 +49,7 @@ class AssignmentUpdate(BaseSchema):
     type: AssignmentTypeType | None = None
     class_id: UUID | None = None
     due_date: date | None = None
-    planned_start_date: date | None = None
+    planned_start_day: DayOfWeekType | None = None
     estimated_minutes: int | None = Field(None, gt=0)
     status: AssignmentStatusType | None = None
     notes_short: str | None = None

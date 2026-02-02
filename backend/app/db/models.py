@@ -22,7 +22,7 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
-from sqlalchemy.dialects.postgresql import CITEXT, JSONB, TIMESTAMP, UUID as PGUUID
+from sqlalchemy.dialects.postgresql import CITEXT, ENUM as PGENUM, JSONB, TIMESTAMP, UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -61,6 +61,18 @@ class TimeBlockKind(str, PyEnum):
     MEETING = "meeting"
     CLASS = "class"
     PERSONAL = "personal"
+
+
+class DayOfWeek(str, PyEnum):
+    """Day of the week for planned start."""
+
+    MONDAY = "monday"
+    TUESDAY = "tuesday"
+    WEDNESDAY = "wednesday"
+    THURSDAY = "thursday"
+    FRIDAY = "friday"
+    SATURDAY = "saturday"
+    SUNDAY = "sunday"
 
 
 # =============================================================================
@@ -224,16 +236,12 @@ class Assignment(Base):
 
     __tablename__ = "assignments"
     __table_args__ = (
-        Index("idx_assignments_user_planned_start", "user_id", "planned_start_date"),
+        Index("idx_assignments_user_planned_start", "user_id", "planned_start_day"),
         Index("idx_assignments_user_due_date", "user_id", "due_date"),
         Index("idx_assignments_user_status", "user_id", "status"),
         CheckConstraint(
             "estimated_minutes IS NULL OR estimated_minutes > 0",
             name="valid_estimated_minutes",
-        ),
-        CheckConstraint(
-            "planned_start_date IS NULL OR due_date IS NULL OR planned_start_date <= due_date",
-            name="valid_date_order",
         ),
     )
 
@@ -247,14 +255,21 @@ class Assignment(Base):
         PGUUID(as_uuid=True), ForeignKey("classes.id", ondelete="SET NULL"), nullable=True, index=True
     )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
-    type: Mapped[AssignmentType] = mapped_column(
-        String(20), nullable=False, default=AssignmentType.OTHER
+    type: Mapped[str] = mapped_column(
+        PGENUM("pset", "reading", "project", "quiz", "other", name="assignment_type", create_type=False),
+        nullable=False,
+        default="other",
     )
     due_date: Mapped[Optional[date]] = mapped_column(nullable=True)
-    planned_start_date: Mapped[Optional[date]] = mapped_column(nullable=True)
+    planned_start_day: Mapped[Optional[str]] = mapped_column(
+        PGENUM("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday", name="day_of_week", create_type=False),
+        nullable=True,
+    )
     estimated_minutes: Mapped[Optional[int]] = mapped_column(nullable=True)
-    status: Mapped[AssignmentStatus] = mapped_column(
-        String(20), nullable=False, default=AssignmentStatus.NOT_STARTED
+    status: Mapped[str] = mapped_column(
+        PGENUM("not_started", "in_progress", "done", name="assignment_status", create_type=False),
+        nullable=False,
+        default="not_started",
     )
     notes_short: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -269,6 +284,9 @@ class Assignment(Base):
     class_: Mapped[Optional["Class"]] = relationship("Class", back_populates="assignments")
     time_blocks: Mapped[list["TimeBlock"]] = relationship(
         "TimeBlock", back_populates="assignment", passive_deletes=True
+    )
+    notes: Mapped[list["Note"]] = relationship(
+        "Note", back_populates="assignment", passive_deletes=True
     )
 
 
@@ -314,8 +332,10 @@ class Exam(Base):
 
 class Note(Base):
     """
-    User notes with markdown and optional rich text support.
+    User notes with markdown content.
 
+    Notes can be standalone or attached to a class or assignment.
+    Content is stored as markdown in content_text for AI readability.
     Uses TEXT[] for tags (simpler than JSONB for flat string arrays).
     """
 
@@ -334,9 +354,12 @@ class Note(Base):
     class_id: Mapped[Optional[UUID]] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("classes.id", ondelete="SET NULL"), nullable=True, index=True
     )
-    title: Mapped[str] = mapped_column(String(255), nullable=False)
-    content_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    content_json: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    assignment_id: Mapped[Optional[UUID]] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("assignments.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    title: Mapped[str] = mapped_column(String(255), nullable=False, default="Untitled")
+    content_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Markdown content
+    content_json: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)  # Deprecated, unused
     tags: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=text("NOW()"), nullable=False
@@ -348,6 +371,7 @@ class Note(Base):
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="notes")
     class_: Mapped[Optional["Class"]] = relationship("Class", back_populates="notes")
+    assignment: Mapped[Optional["Assignment"]] = relationship("Assignment", back_populates="notes")
 
 
 class TimeBlock(Base):
@@ -375,8 +399,10 @@ class TimeBlock(Base):
     end_datetime: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=False
     )
-    kind: Mapped[TimeBlockKind] = mapped_column(
-        String(20), nullable=False, default=TimeBlockKind.PERSONAL
+    kind: Mapped[str] = mapped_column(
+        PGENUM("assignment", "meeting", "class", "personal", name="time_block_kind", create_type=False),
+        nullable=False,
+        default="personal",
     )
     assignment_id: Mapped[Optional[UUID]] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("assignments.id", ondelete="SET NULL"), nullable=True, index=True

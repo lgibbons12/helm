@@ -138,6 +138,105 @@ export interface AuthResponse {
 }
 
 // =============================================================================
+// Note Types
+// =============================================================================
+
+export interface Note {
+  id: string
+  user_id: string
+  class_id: string | null
+  assignment_id: string | null
+  title: string
+  content_text: string | null  // Markdown content
+  tags: string[]
+  created_at: string
+  updated_at: string
+}
+
+export interface NoteCreate {
+  title?: string
+  content_text?: string | null
+  tags?: string[]
+  class_id?: string | null
+  assignment_id?: string | null
+}
+
+export interface NoteUpdate {
+  title?: string
+  content_text?: string | null
+  tags?: string[]
+}
+
+export interface NoteListParams {
+  class_id?: string
+  assignment_id?: string
+  tag?: string
+  q?: string
+  standalone?: boolean
+}
+
+// =============================================================================
+// Assignment Types
+// =============================================================================
+
+export type AssignmentStatus = 'not_started' | 'in_progress' | 'done'
+export type AssignmentType = 'pset' | 'reading' | 'project' | 'quiz' | 'other'
+export type DayOfWeek = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday'
+
+export interface Assignment {
+  id: string
+  user_id: string
+  class_id: string | null
+  title: string
+  type: AssignmentType
+  due_date: string | null
+  planned_start_day: DayOfWeek | null
+  estimated_minutes: number | null
+  status: AssignmentStatus
+  notes_short: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface AssignmentCreate {
+  title: string
+  type?: AssignmentType
+  class_id?: string | null
+  due_date?: string | null
+  planned_start_day?: DayOfWeek | null
+  estimated_minutes?: number | null
+  status?: AssignmentStatus
+  notes_short?: string | null
+}
+
+export interface AssignmentUpdate {
+  title?: string
+  type?: AssignmentType
+  class_id?: string | null
+  due_date?: string | null
+  planned_start_day?: DayOfWeek | null
+  estimated_minutes?: number | null
+  status?: AssignmentStatus
+  notes_short?: string | null
+}
+
+// =============================================================================
+// Helper Functions
+// =============================================================================
+
+function buildQueryString(params?: Record<string, string | boolean | undefined>): string {
+  if (!params) return ''
+  const searchParams = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== '') {
+      searchParams.append(key, String(value))
+    }
+  }
+  const queryString = searchParams.toString()
+  return queryString ? `?${queryString}` : ''
+}
+
+// =============================================================================
 // API Endpoints
 // =============================================================================
 
@@ -162,4 +261,32 @@ export const classesApi = {
     api.patch<Class>(`/classes/${id}`, data),
 
   delete: (id: string) => api.delete(`/classes/${id}`),
+}
+
+export const notesApi = {
+  list: (params?: NoteListParams) =>
+    api.get<Note[]>(`/notes${buildQueryString(params)}`),
+
+  get: (id: string) => api.get<Note>(`/notes/${id}`),
+
+  create: (data: NoteCreate) => api.post<Note>('/notes', data),
+
+  update: (id: string, data: NoteUpdate) =>
+    api.patch<Note>(`/notes/${id}`, data),
+
+  delete: (id: string) => api.delete(`/notes/${id}`),
+}
+
+export const assignmentsApi = {
+  list: (params?: { class_id?: string; status?: AssignmentStatus }) =>
+    api.get<Assignment[]>(`/assignments${buildQueryString(params)}`),
+
+  get: (id: string) => api.get<Assignment>(`/assignments/${id}`),
+
+  create: (data: AssignmentCreate) => api.post<Assignment>('/assignments', data),
+
+  update: (id: string, data: AssignmentUpdate) =>
+    api.patch<Assignment>(`/assignments/${id}`, data),
+
+  delete: (id: string) => api.delete(`/assignments/${id}`),
 }
