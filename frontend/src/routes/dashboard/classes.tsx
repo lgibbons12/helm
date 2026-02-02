@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { Plus, ExternalLink, User, BookOpen } from 'lucide-react'
@@ -6,6 +7,7 @@ import { classesApi, type Class } from '../../lib/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { AddClassDialog } from '@/components/add-class-dialog'
 
 export const Route = createFileRoute('/dashboard/classes')({
   component: ClassesPage,
@@ -15,6 +17,8 @@ export const Route = createFileRoute('/dashboard/classes')({
 const classesQueryKey = ['classes'] as const
 
 function ClassesPage() {
+  const [dialogOpen, setDialogOpen] = useState(false)
+
   const {
     data: classes,
     isLoading,
@@ -34,7 +38,7 @@ function ClassesPage() {
             manage your courses and track your academic progress
           </p>
         </div>
-        <Button className="gap-2">
+        <Button className="gap-2" onClick={() => setDialogOpen(true)}>
           <Plus className="w-4 h-4" />
           add class
         </Button>
@@ -48,8 +52,11 @@ function ClassesPage() {
       ) : classes && classes.length > 0 ? (
         <ClassesGrid classes={classes} />
       ) : (
-        <ClassesEmpty />
+        <ClassesEmpty onAddClass={() => setDialogOpen(true)} />
       )}
+
+      {/* Add Class Dialog */}
+      <AddClassDialog open={dialogOpen} onOpenChange={setDialogOpen} />
     </div>
   )
 }
@@ -166,7 +173,7 @@ function ClassesLoading() {
   )
 }
 
-function ClassesEmpty() {
+function ClassesEmpty({ onAddClass }: { onAddClass: () => void }) {
   return (
     <div className="glass-card p-12 text-center">
       <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4">
@@ -176,7 +183,7 @@ function ClassesEmpty() {
       <p className="text-muted-foreground mb-6 max-w-sm mx-auto text-sm">
         add your first class to get started tracking your courses, assignments, and schedule.
       </p>
-      <Button className="gap-2">
+      <Button className="gap-2" onClick={onAddClass}>
         <Plus className="w-4 h-4" />
         add your first class
       </Button>
