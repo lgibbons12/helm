@@ -14,7 +14,10 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as DashboardIndexRouteImport } from './routes/dashboard/index'
 import { Route as DashboardNotesRouteImport } from './routes/dashboard/notes'
 import { Route as DashboardClassesRouteImport } from './routes/dashboard/classes'
+import { Route as DashboardBoardRouteImport } from './routes/dashboard/board'
 import { Route as DashboardAssignmentsRouteImport } from './routes/dashboard/assignments'
+import { Route as DashboardClassesIndexRouteImport } from './routes/dashboard/classes/index'
+import { Route as DashboardAssignmentsIndexRouteImport } from './routes/dashboard/assignments/index'
 import { Route as DashboardClassesClassIdRouteImport } from './routes/dashboard/classes/$classId'
 import { Route as DashboardAssignmentsAssignmentIdRouteImport } from './routes/dashboard/assignments/$assignmentId'
 
@@ -43,11 +46,27 @@ const DashboardClassesRoute = DashboardClassesRouteImport.update({
   path: '/classes',
   getParentRoute: () => DashboardRoute,
 } as any)
+const DashboardBoardRoute = DashboardBoardRouteImport.update({
+  id: '/board',
+  path: '/board',
+  getParentRoute: () => DashboardRoute,
+} as any)
 const DashboardAssignmentsRoute = DashboardAssignmentsRouteImport.update({
   id: '/assignments',
   path: '/assignments',
   getParentRoute: () => DashboardRoute,
 } as any)
+const DashboardClassesIndexRoute = DashboardClassesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => DashboardClassesRoute,
+} as any)
+const DashboardAssignmentsIndexRoute =
+  DashboardAssignmentsIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => DashboardAssignmentsRoute,
+  } as any)
 const DashboardClassesClassIdRoute = DashboardClassesClassIdRouteImport.update({
   id: '/$classId',
   path: '/$classId',
@@ -64,31 +83,38 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRouteWithChildren
   '/dashboard/assignments': typeof DashboardAssignmentsRouteWithChildren
+  '/dashboard/board': typeof DashboardBoardRoute
   '/dashboard/classes': typeof DashboardClassesRouteWithChildren
   '/dashboard/notes': typeof DashboardNotesRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/dashboard/assignments/$assignmentId': typeof DashboardAssignmentsAssignmentIdRoute
   '/dashboard/classes/$classId': typeof DashboardClassesClassIdRoute
+  '/dashboard/assignments/': typeof DashboardAssignmentsIndexRoute
+  '/dashboard/classes/': typeof DashboardClassesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/dashboard/assignments': typeof DashboardAssignmentsRouteWithChildren
-  '/dashboard/classes': typeof DashboardClassesRouteWithChildren
+  '/dashboard/board': typeof DashboardBoardRoute
   '/dashboard/notes': typeof DashboardNotesRoute
   '/dashboard': typeof DashboardIndexRoute
   '/dashboard/assignments/$assignmentId': typeof DashboardAssignmentsAssignmentIdRoute
   '/dashboard/classes/$classId': typeof DashboardClassesClassIdRoute
+  '/dashboard/assignments': typeof DashboardAssignmentsIndexRoute
+  '/dashboard/classes': typeof DashboardClassesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRouteWithChildren
   '/dashboard/assignments': typeof DashboardAssignmentsRouteWithChildren
+  '/dashboard/board': typeof DashboardBoardRoute
   '/dashboard/classes': typeof DashboardClassesRouteWithChildren
   '/dashboard/notes': typeof DashboardNotesRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/dashboard/assignments/$assignmentId': typeof DashboardAssignmentsAssignmentIdRoute
   '/dashboard/classes/$classId': typeof DashboardClassesClassIdRoute
+  '/dashboard/assignments/': typeof DashboardAssignmentsIndexRoute
+  '/dashboard/classes/': typeof DashboardClassesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -96,30 +122,37 @@ export interface FileRouteTypes {
     | '/'
     | '/dashboard'
     | '/dashboard/assignments'
+    | '/dashboard/board'
     | '/dashboard/classes'
     | '/dashboard/notes'
     | '/dashboard/'
     | '/dashboard/assignments/$assignmentId'
     | '/dashboard/classes/$classId'
+    | '/dashboard/assignments/'
+    | '/dashboard/classes/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/dashboard/assignments'
-    | '/dashboard/classes'
+    | '/dashboard/board'
     | '/dashboard/notes'
     | '/dashboard'
     | '/dashboard/assignments/$assignmentId'
     | '/dashboard/classes/$classId'
+    | '/dashboard/assignments'
+    | '/dashboard/classes'
   id:
     | '__root__'
     | '/'
     | '/dashboard'
     | '/dashboard/assignments'
+    | '/dashboard/board'
     | '/dashboard/classes'
     | '/dashboard/notes'
     | '/dashboard/'
     | '/dashboard/assignments/$assignmentId'
     | '/dashboard/classes/$classId'
+    | '/dashboard/assignments/'
+    | '/dashboard/classes/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -164,12 +197,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardClassesRouteImport
       parentRoute: typeof DashboardRoute
     }
+    '/dashboard/board': {
+      id: '/dashboard/board'
+      path: '/board'
+      fullPath: '/dashboard/board'
+      preLoaderRoute: typeof DashboardBoardRouteImport
+      parentRoute: typeof DashboardRoute
+    }
     '/dashboard/assignments': {
       id: '/dashboard/assignments'
       path: '/assignments'
       fullPath: '/dashboard/assignments'
       preLoaderRoute: typeof DashboardAssignmentsRouteImport
       parentRoute: typeof DashboardRoute
+    }
+    '/dashboard/classes/': {
+      id: '/dashboard/classes/'
+      path: '/'
+      fullPath: '/dashboard/classes/'
+      preLoaderRoute: typeof DashboardClassesIndexRouteImport
+      parentRoute: typeof DashboardClassesRoute
+    }
+    '/dashboard/assignments/': {
+      id: '/dashboard/assignments/'
+      path: '/'
+      fullPath: '/dashboard/assignments/'
+      preLoaderRoute: typeof DashboardAssignmentsIndexRouteImport
+      parentRoute: typeof DashboardAssignmentsRoute
     }
     '/dashboard/classes/$classId': {
       id: '/dashboard/classes/$classId'
@@ -190,10 +244,12 @@ declare module '@tanstack/react-router' {
 
 interface DashboardAssignmentsRouteChildren {
   DashboardAssignmentsAssignmentIdRoute: typeof DashboardAssignmentsAssignmentIdRoute
+  DashboardAssignmentsIndexRoute: typeof DashboardAssignmentsIndexRoute
 }
 
 const DashboardAssignmentsRouteChildren: DashboardAssignmentsRouteChildren = {
   DashboardAssignmentsAssignmentIdRoute: DashboardAssignmentsAssignmentIdRoute,
+  DashboardAssignmentsIndexRoute: DashboardAssignmentsIndexRoute,
 }
 
 const DashboardAssignmentsRouteWithChildren =
@@ -201,10 +257,12 @@ const DashboardAssignmentsRouteWithChildren =
 
 interface DashboardClassesRouteChildren {
   DashboardClassesClassIdRoute: typeof DashboardClassesClassIdRoute
+  DashboardClassesIndexRoute: typeof DashboardClassesIndexRoute
 }
 
 const DashboardClassesRouteChildren: DashboardClassesRouteChildren = {
   DashboardClassesClassIdRoute: DashboardClassesClassIdRoute,
+  DashboardClassesIndexRoute: DashboardClassesIndexRoute,
 }
 
 const DashboardClassesRouteWithChildren =
@@ -212,6 +270,7 @@ const DashboardClassesRouteWithChildren =
 
 interface DashboardRouteChildren {
   DashboardAssignmentsRoute: typeof DashboardAssignmentsRouteWithChildren
+  DashboardBoardRoute: typeof DashboardBoardRoute
   DashboardClassesRoute: typeof DashboardClassesRouteWithChildren
   DashboardNotesRoute: typeof DashboardNotesRoute
   DashboardIndexRoute: typeof DashboardIndexRoute
@@ -219,6 +278,7 @@ interface DashboardRouteChildren {
 
 const DashboardRouteChildren: DashboardRouteChildren = {
   DashboardAssignmentsRoute: DashboardAssignmentsRouteWithChildren,
+  DashboardBoardRoute: DashboardBoardRoute,
   DashboardClassesRoute: DashboardClassesRouteWithChildren,
   DashboardNotesRoute: DashboardNotesRoute,
   DashboardIndexRoute: DashboardIndexRoute,

@@ -1,20 +1,19 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft,
   User,
   ExternalLink,
-  FileText,
+  ChevronDown,
   Plus,
   Trash2,
 } from 'lucide-react'
 
-import { classesApi, notesApi, type Note, type NoteCreate } from '../../../lib/api'
+import { classesApi, notesApi, type NoteCreate } from '../../../lib/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { NotesList } from '@/components/notes-list'
 import { NoteEditor } from '@/components/note-editor'
 import {
   Dialog,
@@ -23,6 +22,13 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 export const Route = createFileRoute('/dashboard/classes/$classId')({
   component: ClassDetailPage,
@@ -31,25 +37,41 @@ export const Route = createFileRoute('/dashboard/classes/$classId')({
 function ClassDetailPage() {
   const { classId } = Route.useParams()
   const queryClient = useQueryClient()
-  const [selectedNote, setSelectedNote] = useState<Note | null>(null)
+  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
 
   // Fetch class details
   const {
     data: classData,
-    isLoading,
-    error,
+    isLoading: classLoading,
+    error: classError,
   } = useQuery({
     queryKey: ['classes', classId],
     queryFn: () => classesApi.get(classId),
   })
+
+  // Fetch notes for this class
+  const { data: notes = [], isLoading: notesLoading } = useQuery({
+    queryKey: ['notes', { classId }],
+    queryFn: () => notesApi.list({ class_id: classId }),
+  })
+
+  // Auto-select the first note when notes load
+  useEffect(() => {
+    if (notes.length > 0 && !selectedNoteId) {
+      setSelectedNoteId(notes[0].id)
+    }
+  }, [notes, selectedNoteId])
+
+  // Get the currently selected note
+  const selectedNote = notes.find((n) => n.id === selectedNoteId) || null
 
   // Create new note mutation
   const createNote = useMutation({
     mutationFn: (data: NoteCreate) => notesApi.create(data),
     onSuccess: (newNote) => {
       queryClient.invalidateQueries({ queryKey: ['notes'] })
-      setSelectedNote(newNote)
+      setSelectedNoteId(newNote.id)
     },
   })
 
@@ -57,9 +79,8 @@ function ClassDetailPage() {
   const updateNote = useMutation({
     mutationFn: ({ id, data }: { id: string; data: { title: string; content_text: string } }) =>
       notesApi.update(id, data),
-    onSuccess: (updatedNote) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notes'] })
-      setSelectedNote(updatedNote)
     },
   })
 
@@ -68,7 +89,9 @@ function ClassDetailPage() {
     mutationFn: (id: string) => notesApi.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notes'] })
-      setSelectedNote(null)
+      // Select another note if available
+      const remainingNotes = notes.filter((n) => n.id !== selectedNoteId)
+      setSelectedNoteId(remainingNotes.length > 0 ? remainingNotes[0].id : null)
       setDeleteDialogOpen(false)
     },
   })
@@ -76,7 +99,7 @@ function ClassDetailPage() {
   // Handle creating a new note for this class
   const handleNewNote = useCallback(() => {
     createNote.mutate({
-      title: 'untitled',
+      title: 'Untitled',
       content_text: '',
       class_id: classId,
     })
@@ -100,11 +123,11 @@ function ClassDetailPage() {
     deleteNote.mutate(selectedNote.id)
   }, [selectedNote, deleteNote])
 
-  if (isLoading) {
+  if (classLoading) {
     return <ClassDetailLoading />
   }
 
-  if (error || !classData) {
+  if (classError || !classData) {
     return <ClassDetailError />
   }
 
@@ -170,80 +193,100 @@ function ClassDetailPage() {
         </div>
       </div>
 
-      {/* Notes section */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-            <FileText className="w-5 h-5" />
-            notes
-          </h2>
-        </div>
-
-        <div className="h-[500px] flex gap-4">
-          {/* Notes list sidebar */}
-          <div className="w-64 flex-shrink-0 glass rounded-lg overflow-hidden">
-            <NotesList
-              classId={classId}
-              selectedNoteId={selectedNote?.id}
-              onSelectNote={setSelectedNote}
-              onNewNote={handleNewNote}
-            />
-          </div>
-
-          {/* Editor */}
-          <div className="flex-1 glass rounded-lg overflow-hidden">
-            {selectedNote ? (
-              <div className="h-full flex flex-col">
-                <div className="flex items-center justify-between p-3 border-b border-border/50">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setSelectedNote(null)}
-                    className="gap-1 text-xs lowercase"
-                  >
-                    <ArrowLeft className="w-3 h-3" />
-                    back
+      {/* Notes section - full width editor with dropdown */}
+      <div className="glass-card p-6">
+        {/* Note selector header */}
+        <div className="flex items-center justify-between mb-4 pb-4 border-b border-border/50">
+          <div className="flex items-center gap-3">
+            {notesLoading ? (
+              <Skeleton className="h-9 w-48" />
+            ) : notes.length > 0 ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="gap-2 lowercase">
+                    {selectedNote?.title || 'select note'}
+                    <ChevronDown className="w-4 h-4" />
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setDeleteDialogOpen(true)}
-                    className="gap-1 text-xs text-destructive hover:text-destructive lowercase"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                    delete
-                  </Button>
-                </div>
-                <div className="flex-1 overflow-y-auto p-4">
-                  <NoteEditor
-                    key={selectedNote.id}
-                    initialTitle={selectedNote.title}
-                    initialContent={selectedNote.content_text || ''}
-                    onSave={handleSave}
-                  />
-                </div>
-              </div>
-            ) : (
-              <div className="h-full flex items-center justify-center">
-                <div className="text-center space-y-3">
-                  <FileText className="w-10 h-10 text-muted-foreground mx-auto" />
-                  <p className="text-sm text-muted-foreground">
-                    select a note or create a new one
-                  </p>
-                  <Button
-                    size="sm"
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-64">
+                  {notes.map((note) => (
+                    <DropdownMenuItem
+                      key={note.id}
+                      onClick={() => setSelectedNoteId(note.id)}
+                      className={`lowercase ${note.id === selectedNoteId ? 'bg-muted' : ''}`}
+                    >
+                      {note.title}
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
                     onClick={handleNewNote}
                     disabled={createNote.isPending}
-                    className="gap-1 lowercase"
+                    className="lowercase"
                   >
-                    <Plus className="w-3 h-3" />
+                    <Plus className="w-4 h-4 mr-2" />
                     new note
-                  </Button>
-                </div>
-              </div>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <span className="text-sm text-muted-foreground lowercase">no notes yet</span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            {notes.length === 0 && (
+              <Button
+                size="sm"
+                onClick={handleNewNote}
+                disabled={createNote.isPending}
+                className="gap-1 lowercase"
+              >
+                <Plus className="w-4 h-4" />
+                create note
+              </Button>
+            )}
+            {selectedNote && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setDeleteDialogOpen(true)}
+                className="gap-1 text-destructive hover:text-destructive lowercase"
+              >
+                <Trash2 className="w-4 h-4" />
+                delete
+              </Button>
             )}
           </div>
         </div>
+
+        {/* Note editor */}
+        {selectedNote ? (
+          <NoteEditor
+            key={selectedNote.id}
+            initialTitle={selectedNote.title}
+            initialContent={selectedNote.content_text || ''}
+            onSave={handleSave}
+          />
+        ) : (
+          <div className="py-12 text-center">
+            <p className="text-muted-foreground lowercase mb-4">
+              {notes.length === 0
+                ? 'create your first note for this class'
+                : 'select a note from the dropdown'}
+            </p>
+            {notes.length === 0 && (
+              <Button
+                onClick={handleNewNote}
+                disabled={createNote.isPending}
+                className="gap-1 lowercase"
+              >
+                <Plus className="w-4 h-4" />
+                create note
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Delete confirmation dialog */}
