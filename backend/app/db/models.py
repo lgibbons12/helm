@@ -1,0 +1,453 @@
+"""
+SQLAlchemy 2.0 Models for Helm.
+
+Uses modern declarative syntax with Mapped[] type annotations.
+All models use UUID primary keys and proper relationship definitions.
+"""
+
+import datetime as dt
+from datetime import date, datetime
+from enum import Enum as PyEnum
+from typing import TYPE_CHECKING, Optional
+from uuid import UUID, uuid4
+
+from sqlalchemy import (
+    ARRAY,
+    CheckConstraint,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
+from sqlalchemy.dialects.postgresql import CITEXT, JSONB, TIMESTAMP, UUID as PGUUID
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.db.base import Base
+
+if TYPE_CHECKING:
+    pass
+
+
+# =============================================================================
+# ENUMS
+# =============================================================================
+
+
+class AssignmentStatus(str, PyEnum):
+    """Status of an assignment."""
+
+    NOT_STARTED = "not_started"
+    IN_PROGRESS = "in_progress"
+    DONE = "done"
+
+
+class AssignmentType(str, PyEnum):
+    """Type of assignment."""
+
+    PSET = "pset"
+    READING = "reading"
+    PROJECT = "project"
+    QUIZ = "quiz"
+    OTHER = "other"
+
+
+class TimeBlockKind(str, PyEnum):
+    """Kind of time block."""
+
+    ASSIGNMENT = "assignment"
+    MEETING = "meeting"
+    CLASS = "class"
+    PERSONAL = "personal"
+
+
+# =============================================================================
+# MODELS
+# =============================================================================
+
+
+class User(Base):
+    """
+    Core user account.
+
+    Decoupled from auth providers - users can have multiple auth_identities
+    (Google, GitHub, Apple, etc.) linked to one account.
+    """
+
+    __tablename__ = "users"
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    email: Mapped[Optional[str]] = mapped_column(
+        CITEXT(), unique=True, index=True, nullable=True
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=text("NOW()"), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=text("NOW()"), nullable=False
+    )
+
+    # Relationships
+    auth_identities: Mapped[list["AuthIdentity"]] = relationship(
+        "AuthIdentity", back_populates="user", cascade="all, delete-orphan"
+    )
+    classes: Mapped[list["Class"]] = relationship(
+        "Class", back_populates="user", cascade="all, delete-orphan"
+    )
+    assignments: Mapped[list["Assignment"]] = relationship(
+        "Assignment", back_populates="user", cascade="all, delete-orphan"
+    )
+    exams: Mapped[list["Exam"]] = relationship(
+        "Exam", back_populates="user", cascade="all, delete-orphan"
+    )
+    notes: Mapped[list["Note"]] = relationship(
+        "Note", back_populates="user", cascade="all, delete-orphan"
+    )
+    time_blocks: Mapped[list["TimeBlock"]] = relationship(
+        "TimeBlock", back_populates="user", cascade="all, delete-orphan"
+    )
+    transactions: Mapped[list["Transaction"]] = relationship(
+        "Transaction", back_populates="user", cascade="all, delete-orphan"
+    )
+    budget_settings: Mapped[Optional["BudgetSettings"]] = relationship(
+        "BudgetSettings", back_populates="user", uselist=False, cascade="all, delete-orphan"
+    )
+
+
+class AuthIdentity(Base):
+    """
+    OAuth provider identity linked to a user.
+
+    Supports multiple providers per user (e.g., Google + GitHub linked).
+    Does NOT store OAuth access/refresh tokens - we only verify id_tokens at login.
+    """
+
+    __tablename__ = "auth_identities"
+    __table_args__ = (
+        UniqueConstraint("provider", "provider_user_id", name="unique_provider_identity"),
+        Index("idx_auth_identities_provider_lookup", "provider", "provider_user_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    provider: Mapped[str] = mapped_column(String(50), nullable=False)  # 'google', 'github', 'apple'
+    provider_user_id: Mapped[str] = mapped_column(String(255), nullable=False)  # Provider's 'sub' claim
+    email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # For audit
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=text("NOW()"), nullable=False
+    )
+    last_login_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=text("NOW()"), nullable=False
+    )
+
+    # Relationships
+    user: Mapped["User"] = relationship("User", back_populates="auth_identities")
+
+
+class Class(Base):
+    """
+    Academic class/course.
+
+    Parent entity for assignments, exams, and notes.
+    Uses JSONB for flexible link storage (syllabus, Zoom, Canvas, etc.).
+    """
+
+    __tablename__ = "classes"
+    __table_args__ = (
+        # Partial unique indexes for code/name uniqueness
+        Index(
+            "idx_classes_user_semester_code",
+            "user_id", "semester", "code",
+            unique=True,
+            postgresql_where=text("code IS NOT NULL"),
+        ),
+        Index(
+            "idx_classes_user_semester_name_no_code",
+            "user_id", "semester", "name",
+            unique=True,
+            postgresql_where=text("code IS NULL"),
+        ),
+        Index("idx_classes_semester", "user_id", "semester"),
+        CheckConstraint(
+            "color IS NULL OR color ~* '^#[0-9A-Fa-f]{6}$'",
+            name="valid_color",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    code: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # e.g., "CS 101"
+    semester: Mapped[str] = mapped_column(String(50), nullable=False)  # e.g., "Spring 2026"
+    color: Mapped[Optional[str]] = mapped_column(String(7), nullable=True)  # Hex color
+    instructor: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    links_json: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=text("NOW()"), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=text("NOW()"), nullable=False
+    )
+
+    # Relationships
+    user: Mapped["User"] = relationship("User", back_populates="classes")
+    assignments: Mapped[list["Assignment"]] = relationship(
+        "Assignment", back_populates="class_", passive_deletes=True
+    )
+    exams: Mapped[list["Exam"]] = relationship(
+        "Exam", back_populates="class_", passive_deletes=True
+    )
+    notes: Mapped[list["Note"]] = relationship(
+        "Note", back_populates="class_", passive_deletes=True
+    )
+
+
+class Assignment(Base):
+    """
+    Academic assignment (homework, reading, project, quiz).
+
+    Core scheduling entity with due dates, time estimates, and status tracking.
+    """
+
+    __tablename__ = "assignments"
+    __table_args__ = (
+        Index("idx_assignments_user_planned_start", "user_id", "planned_start_date"),
+        Index("idx_assignments_user_due_date", "user_id", "due_date"),
+        Index("idx_assignments_user_status", "user_id", "status"),
+        CheckConstraint(
+            "estimated_minutes IS NULL OR estimated_minutes > 0",
+            name="valid_estimated_minutes",
+        ),
+        CheckConstraint(
+            "planned_start_date IS NULL OR due_date IS NULL OR planned_start_date <= due_date",
+            name="valid_date_order",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    class_id: Mapped[Optional[UUID]] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("classes.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    type: Mapped[AssignmentType] = mapped_column(
+        String(20), nullable=False, default=AssignmentType.OTHER
+    )
+    due_date: Mapped[Optional[date]] = mapped_column(nullable=True)
+    planned_start_date: Mapped[Optional[date]] = mapped_column(nullable=True)
+    estimated_minutes: Mapped[Optional[int]] = mapped_column(nullable=True)
+    status: Mapped[AssignmentStatus] = mapped_column(
+        String(20), nullable=False, default=AssignmentStatus.NOT_STARTED
+    )
+    notes_short: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=text("NOW()"), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=text("NOW()"), nullable=False
+    )
+
+    # Relationships
+    user: Mapped["User"] = relationship("User", back_populates="assignments")
+    class_: Mapped[Optional["Class"]] = relationship("Class", back_populates="assignments")
+    time_blocks: Mapped[list["TimeBlock"]] = relationship(
+        "TimeBlock", back_populates="assignment", passive_deletes=True
+    )
+
+
+class Exam(Base):
+    """Scheduled exam or test."""
+
+    __tablename__ = "exams"
+    __table_args__ = (
+        Index("idx_exams_user_datetime", "user_id", "exam_datetime"),
+        CheckConstraint(
+            "weight IS NULL OR (weight >= 0 AND weight <= 100)",
+            name="valid_weight",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    class_id: Mapped[Optional[UUID]] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("classes.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    exam_datetime: Mapped[Optional[datetime]] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=True
+    )
+    location: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    weight: Mapped[Optional[float]] = mapped_column(Numeric(5, 2), nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=text("NOW()"), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=text("NOW()"), nullable=False
+    )
+
+    # Relationships
+    user: Mapped["User"] = relationship("User", back_populates="exams")
+    class_: Mapped[Optional["Class"]] = relationship("Class", back_populates="exams")
+
+
+class Note(Base):
+    """
+    User notes with markdown and optional rich text support.
+
+    Uses TEXT[] for tags (simpler than JSONB for flat string arrays).
+    """
+
+    __tablename__ = "notes"
+    __table_args__ = (
+        Index("idx_notes_user_updated_at", "user_id", "updated_at"),
+        Index("idx_notes_tags", "tags", postgresql_using="gin"),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    class_id: Mapped[Optional[UUID]] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("classes.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    content_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    content_json: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    tags: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=text("NOW()"), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=text("NOW()"), nullable=False
+    )
+
+    # Relationships
+    user: Mapped["User"] = relationship("User", back_populates="notes")
+    class_: Mapped[Optional["Class"]] = relationship("Class", back_populates="notes")
+
+
+class TimeBlock(Base):
+    """Calendar schedule block for planning."""
+
+    __tablename__ = "time_blocks"
+    __table_args__ = (
+        Index("idx_time_blocks_user_start", "user_id", "start_datetime"),
+        Index("idx_time_blocks_user_range", "user_id", "start_datetime", "end_datetime"),
+        CheckConstraint(
+            "end_datetime > start_datetime",
+            name="valid_time_range",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    start_datetime: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False
+    )
+    end_datetime: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False
+    )
+    kind: Mapped[TimeBlockKind] = mapped_column(
+        String(20), nullable=False, default=TimeBlockKind.PERSONAL
+    )
+    assignment_id: Mapped[Optional[UUID]] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("assignments.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    title_override: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=text("NOW()"), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=text("NOW()"), nullable=False
+    )
+
+    # Relationships
+    user: Mapped["User"] = relationship("User", back_populates="time_blocks")
+    assignment: Mapped[Optional["Assignment"]] = relationship("Assignment", back_populates="time_blocks")
+
+
+class Transaction(Base):
+    """Financial transaction for budgeting."""
+
+    __tablename__ = "transactions"
+    __table_args__ = (
+        Index("idx_transactions_user_date", "user_id", "date"),
+        Index("idx_transactions_user_category", "user_id", "category"),
+        CheckConstraint(
+            "(is_income = TRUE AND amount_signed > 0) OR (is_income = FALSE AND amount_signed <= 0)",
+            name="valid_amount_sign",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    date: Mapped[dt.date] = mapped_column(nullable=False)
+    amount_signed: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    merchant: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    category: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_income: Mapped[bool] = mapped_column(default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=text("NOW()"), nullable=False
+    )
+
+    # Relationships
+    user: Mapped["User"] = relationship("User", back_populates="transactions")
+
+
+class BudgetSettings(Base):
+    """Per-user budget configuration (1:1 with users)."""
+
+    __tablename__ = "budget_settings"
+
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    large_expense_threshold: Mapped[Optional[float]] = mapped_column(
+        Numeric(10, 2), default=100.00
+    )
+    weekly_budget_target: Mapped[Optional[float]] = mapped_column(
+        Numeric(10, 2), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=text("NOW()"), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=text("NOW()"), nullable=False
+    )
+
+    # Relationships
+    user: Mapped["User"] = relationship("User", back_populates="budget_settings")

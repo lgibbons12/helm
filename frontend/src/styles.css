@@ -1,0 +1,291 @@
+@import 'tailwindcss';
+
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+body {
+  margin: 0;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* =============================================================================
+   Helm Custom Color Palette
+   Navy/Slate - Minimal Hacker Theme
+   ============================================================================= */
+
+:root {
+  /* Core colors */
+  --background: #F8FAFC;          /* slate-50 */
+  --foreground: #0F172A;          /* deep navy / slate-900 */
+  --card: #FFFFFF;
+  --card-foreground: #0F172A;
+  --popover: #FFFFFF;
+  --popover-foreground: #0F172A;
+  
+  /* Primary: Deep Navy */
+  --primary: #0F172A;
+  --primary-foreground: #F8FAFC;
+  
+  /* Secondary: Slate */
+  --secondary: #1E293B;           /* slate-800 */
+  --secondary-foreground: #F8FAFC;
+  
+  /* Muted */
+  --muted: #F1F5F9;               /* slate-100 */
+  --muted-foreground: #64748B;    /* slate-500 */
+  
+  /* Accent: Slate Blue */
+  --accent: #475569;              /* slate-600 */
+  --accent-foreground: #FFFFFF;
+  --accent-soft: #CBD5E1;         /* slate-300 */
+  
+  /* Status colors */
+  --success: #16A34A;             /* green-600 */
+  --warning: #CA8A04;             /* yellow-600 */
+  --destructive: #DC2626;         /* red-600 */
+  --destructive-foreground: #FFFFFF;
+  
+  /* Borders & inputs */
+  --border: #E2E8F0;              /* slate-200 */
+  --input: #E2E8F0;
+  --ring: #475569;
+  
+  /* Chart colors */
+  --chart-1: #475569;
+  --chart-2: #0F172A;
+  --chart-3: #64748B;
+  --chart-4: #16A34A;
+  --chart-5: #94A3B8;
+  
+  /* Radius */
+  --radius: 0.75rem;
+  
+  /* Sidebar */
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #0F172A;
+  --sidebar-primary: #0F172A;
+  --sidebar-primary-foreground: #F8FAFC;
+  --sidebar-accent: #F1F5F9;
+  --sidebar-accent-foreground: #0F172A;
+  --sidebar-border: #E2E8F0;
+  --sidebar-ring: #475569;
+}
+
+.dark {
+  --background: #0F172A;
+  --foreground: #F8FAFC;
+  --card: #1E293B;
+  --card-foreground: #F8FAFC;
+  --popover: #1E293B;
+  --popover-foreground: #F8FAFC;
+  --primary: #F8FAFC;
+  --primary-foreground: #0F172A;
+  --secondary: #334155;
+  --secondary-foreground: #F8FAFC;
+  --muted: #334155;
+  --muted-foreground: #94A3B8;
+  --accent: #64748B;              /* slate-500 for dark mode */
+  --accent-foreground: #F8FAFC;
+  --destructive: #EF4444;
+  --destructive-foreground: #FFFFFF;
+  --border: #334155;
+  --input: #334155;
+  --ring: #64748B;
+  --sidebar: #1E293B;
+  --sidebar-foreground: #F8FAFC;
+  --sidebar-primary: #F8FAFC;
+  --sidebar-primary-foreground: #0F172A;
+  --sidebar-accent: #334155;
+  --sidebar-accent-foreground: #F8FAFC;
+  --sidebar-border: #334155;
+  --sidebar-ring: #64748B;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  
+  /* Custom colors for Helm */
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-accent-soft: var(--accent-soft);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+    outline-color: color-mix(in oklch, var(--ring) 50%, transparent);
+  }
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+  }
+}
+
+/* =============================================================================
+   Liquid Glass Effects
+   Apple-inspired glassmorphism for navigation and overlay elements
+   ============================================================================= */
+
+/* Light glass panel - for use on light backgrounds */
+.glass {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 
+    0 8px 32px rgba(15, 23, 42, 0.08),
+    0 0 0 1px rgba(15, 23, 42, 0.05);
+}
+
+/* Stronger glass effect */
+.glass-strong {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 
+    0 8px 32px rgba(15, 23, 42, 0.1),
+    0 0 0 1px rgba(15, 23, 42, 0.05);
+}
+
+/* Subtle glass - minimal effect */
+.glass-subtle {
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* Dark glass panel - for use on dark backgrounds */
+.glass-dark {
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+/* Glass card with hover effect */
+.glass-card {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 
+    0 8px 32px rgba(15, 23, 42, 0.08),
+    0 0 0 1px rgba(15, 23, 42, 0.05);
+  border-radius: 0.75rem;
+  transition: all 0.3s ease;
+}
+
+.glass-card:hover {
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow: 
+    0 12px 40px rgba(15, 23, 42, 0.12),
+    0 0 0 1px rgba(15, 23, 42, 0.08);
+  transform: translateY(-2px);
+}
+
+/* Glass button */
+.glass-button {
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 0.5rem;
+  padding: 0.5rem 1rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.glass-button:hover {
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.1);
+}
+
+/* Slate accent glass - for important elements */
+.glass-accent {
+  background: rgba(71, 85, 105, 0.1);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(71, 85, 105, 0.2);
+}
+
+/* =============================================================================
+   Background Gradients
+   ============================================================================= */
+
+/* Subtle gradient background for pages */
+.bg-gradient-subtle {
+  background: linear-gradient(
+    135deg,
+    #F8FAFC 0%,
+    #F1F5F9 50%,
+    #E2E8F0 100%
+  );
+}
+
+/* Navy gradient for hero sections */
+.bg-gradient-navy {
+  background: linear-gradient(
+    135deg,
+    #0F172A 0%,
+    #1E293B 50%,
+    #334155 100%
+  );
+}
+
+/* Accent glow effect */
+.glow-accent {
+  box-shadow: 0 0 20px rgba(71, 85, 105, 0.3);
+}
+
+/* Text gradient - slate blue */
+.text-gradient-accent {
+  background: linear-gradient(135deg, #475569 0%, #64748B 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}

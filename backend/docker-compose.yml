@@ -1,0 +1,43 @@
+# Helm Backend - Docker Compose
+# Provides PostgreSQL database for local development
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: helm-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: helm
+      POSTGRES_PASSWORD: helm_dev_password
+      POSTGRES_DB: helm
+    ports:
+      - "5432:5432"
+    volumes:
+      - helm_postgres_data:/var/lib/postgresql/data
+      # Optional: run schema.sql on first startup
+      # - ./sql/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U helm -d helm"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Optional: pgAdmin for database management UI
+  # Uncomment if you want a web UI for the database
+  # pgadmin:
+  #   image: dpage/pgadmin4:latest
+  #   container_name: helm-pgadmin
+  #   restart: unless-stopped
+  #   environment:
+  #     PGADMIN_DEFAULT_EMAIL: admin@helm.local
+  #     PGADMIN_DEFAULT_PASSWORD: admin
+  #     PGADMIN_CONFIG_SERVER_MODE: "False"
+  #   ports:
+  #     - "5050:80"
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+
+volumes:
+  helm_postgres_data:
+    driver: local
