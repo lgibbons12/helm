@@ -24,6 +24,7 @@ import {
   Loader2,
   Check,
   AlertCircle,
+  Save,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -40,11 +41,10 @@ interface NoteEditorProps {
   initialTitle?: string
   initialContent?: string
   onSave: (title: string, content: string) => Promise<void>
-  saveDebounceMs?: number
   readOnly?: boolean
 }
 
-type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
+type SaveStatus = 'idle' | 'saving' | 'saved' | 'error' | 'unsaved'
 
 // =============================================================================
 // Slash Command Menu
@@ -116,7 +116,6 @@ export function NoteEditor({
   initialTitle = '',
   initialContent = '',
   onSave,
-  saveDebounceMs = 800,
   readOnly = false,
 }: NoteEditorProps) {
   const [title, setTitle] = useState(initialTitle)
@@ -213,10 +212,8 @@ export function NoteEditor({
       },
     },
     onUpdate: () => {
-      // Close slash menu when content changes outside of slash input
-      if (showSlashMenu) {
-        // Keep menu open if still typing filter
-      }
+      // Mark as unsaved when content changes
+      setSaveStatus('unsaved')
     },
   })
 
@@ -257,8 +254,8 @@ export function NoteEditor({
     return editor.getText()
   }, [editor])
 
-  // Debounced auto-save
-  useEffect(() => {
+  // Manual save function
+  const handleSave = useCallback(async () => {
     if (readOnly || !editor) return
 
     const content = getMarkdown()
@@ -270,22 +267,39 @@ export function NoteEditor({
 
     setSaveStatus('saving')
 
-    const timeoutId = setTimeout(async () => {
-      try {
-        await onSave(title, content)
-        setLastSavedContent(content)
-        setLastSavedTitle(title)
-        setSaveStatus('saved')
-        // Reset to idle after showing saved status
-        setTimeout(() => setSaveStatus('idle'), 2000)
-      } catch (error) {
-        console.error('Failed to save note:', error)
-        setSaveStatus('error')
-      }
-    }, saveDebounceMs)
+    try {
+      await onSave(title, content)
+      setLastSavedContent(content)
+      setLastSavedTitle(title)
+      setSaveStatus('saved')
+      // Reset to idle after showing saved status
+      setTimeout(() => setSaveStatus('idle'), 2000)
+    } catch (error) {
+      console.error('Failed to save note:', error)
+      setSaveStatus('error')
+    }
+  }, [editor, getMarkdown, lastSavedContent, lastSavedTitle, onSave, readOnly, title])
 
-    return () => clearTimeout(timeoutId)
-  }, [title, editor?.state.doc, getMarkdown, onSave, saveDebounceMs, readOnly, lastSavedContent, lastSavedTitle])
+  // Handle Ctrl+S to save
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault()
+        handleSave()
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [handleSave])
+
+  // Track title changes for unsaved state
+  const handleTitleChange = useCallback((newTitle: string) => {
+    setTitle(newTitle)
+    if (newTitle !== lastSavedTitle) {
+      setSaveStatus('unsaved')
+    }
+  }, [lastSavedTitle])
 
   // Update content when initial values change (e.g., loading different note)
   useEffect(() => {
@@ -318,12 +332,30 @@ export function NoteEditor({
       <div className="flex items-center gap-4">
         <Input
           value={title}
-          onChange={(e) => setTitle(e.target.value)}
+          onChange={(e) => handleTitleChange(e.target.value)}
           placeholder="untitled"
           className="text-xl font-semibold border-0 bg-transparent focus-visible:ring-0 px-0"
           disabled={readOnly}
         />
-        <SaveStatusIndicator status={saveStatus} />
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <SaveStatusIndicator status={saveStatus} />
+          {!readOnly && (
+            <Button
+              variant={saveStatus === 'unsaved' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={handleSave}
+              disabled={saveStatus === 'saving' || saveStatus === 'idle' || saveStatus === 'saved'}
+              className="gap-1.5 lowercase"
+            >
+              {saveStatus === 'saving' ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Save className="w-3.5 h-3.5" />
+              )}
+              save
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Toolbar */}
@@ -477,22 +509,22 @@ export function NoteEditor({
 function SaveStatusIndicator({ status }: { status: SaveStatus }) {
   return (
     <div className="flex items-center gap-1 text-xs text-muted-foreground">
+      {status === 'unsaved' && (
+        <span className="text-amber-500">unsaved</span>
+      )}
       {status === 'saving' && (
-        <>
-          <Loader2 className="w-3 h-3 animate-spin" />
-          <span>saving...</span>
-        </>
+        <span>saving...</span>
       )}
       {status === 'saved' && (
         <>
-          <Check className="w-3 h-3 text-success" />
+          <Check className="w-3 h-3 text-green-500" />
           <span>saved</span>
         </>
       )}
       {status === 'error' && (
         <>
           <AlertCircle className="w-3 h-3 text-destructive" />
-          <span>save failed</span>
+          <span>failed</span>
         </>
       )}
     </div>
