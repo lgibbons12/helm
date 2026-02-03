@@ -1,6 +1,6 @@
 # Helm
 
-Helm is a personal academic command center that puts you in control of your time, coursework, and energy.
+Helm is your personal academic command center that puts you in control of your time, coursework, and energy.
 
 ## Tech Stack
 
