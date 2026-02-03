@@ -21,7 +21,7 @@ import {
 import { useGoogleLogin } from '@react-oauth/google'
 import { useNavigate } from '@tanstack/react-router'
 
-import { authApi, type User, ApiError } from './api'
+import { authApi, type User, ApiError, tokenStorage } from './api'
 
 // =============================================================================
 // Types
@@ -100,6 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logoutMutation = useMutation({
     mutationFn: authApi.logout,
     onSuccess: () => {
+      tokenStorage.clear()
       queryClient.setQueryData(authKeys.user, null)
       queryClient.clear()
       navigate({ to: '/' })
@@ -166,7 +167,12 @@ export function useGoogleCredentialLogin() {
     mutationFn: async (credential: string) => {
       return authApi.googleLogin(credential)
     },
-    onSuccess: async () => {
+    onSuccess: async (data) => {
+      // Store token in localStorage as fallback for mobile browsers
+      // that block cross-site cookies
+      if (data.access_token) {
+        tokenStorage.set(data.access_token)
+      }
       await queryClient.invalidateQueries({ queryKey: authKeys.user })
       navigate({ to: '/dashboard/classes' })
     },

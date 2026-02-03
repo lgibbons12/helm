@@ -2,10 +2,42 @@
  * API Client for Helm Backend
  *
  * Uses fetch with credentials: 'include' to send httpOnly cookies
- * for authentication. The backend sets the JWT in a cookie.
+ * for authentication. Falls back to localStorage token for mobile
+ * browsers that block cross-site cookies.
  */
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const TOKEN_KEY = 'helm_access_token'
+
+// Token storage helpers (fallback for mobile browsers that block cookies)
+export const tokenStorage = {
+  get: (): string | null => {
+    if (typeof window === 'undefined') return null
+    return localStorage.getItem(TOKEN_KEY)
+  },
+  set: (token: string): void => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(TOKEN_KEY, token)
+    }
+  },
+  clear: (): void => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(TOKEN_KEY)
+    }
+  },
+}
+
+// Build headers with optional Authorization token
+function getHeaders(): HeadersInit {
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+  }
+  const token = tokenStorage.get()
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+  return headers
+}
 
 export class ApiError extends Error {
   constructor(
@@ -48,9 +80,7 @@ export const api = {
     const response = await fetch(`${API_BASE}${path}`, {
       method: 'GET',
       credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getHeaders(),
     })
     return handleResponse<T>(response)
   },
@@ -59,9 +89,7 @@ export const api = {
     const response = await fetch(`${API_BASE}${path}`, {
       method: 'POST',
       credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getHeaders(),
       body: data ? JSON.stringify(data) : undefined,
     })
     return handleResponse<T>(response)
@@ -71,9 +99,7 @@ export const api = {
     const response = await fetch(`${API_BASE}${path}`, {
       method: 'PATCH',
       credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getHeaders(),
       body: JSON.stringify(data),
     })
     return handleResponse<T>(response)
@@ -83,6 +109,7 @@ export const api = {
     const response = await fetch(`${API_BASE}${path}`, {
       method: 'DELETE',
       credentials: 'include',
+      headers: getHeaders(),
     })
     return handleResponse<void>(response)
   },
