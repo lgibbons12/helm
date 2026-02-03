@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     debug: bool = False
 
     # Database
+    # If database_url_override is set (e.g., for Neon with SSL), it takes precedence
+    database_url_override: str | None = None
     postgres_host: str = "localhost"
     postgres_port: int = 5432
     postgres_user: str = "helm"
@@ -31,13 +33,41 @@ class Settings(BaseSettings):
     @computed_field
     @property
     def database_url(self) -> str:
-        """Construct async database URL."""
+        """Get async database URL. Uses override if provided, otherwise constructs from parts."""
+        if self.database_url_override:
+            url = self.database_url_override
+            # Replace scheme for async driver
+            if url.startswith("postgresql://"):
+                url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+            elif url.startswith("postgres://"):
+                url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+            # Strip query params - asyncpg doesn't accept them via URL
+            # SSL is handled via connect_args in session.py
+            if "?" in url:
+                url = url.split("?")[0]
+            return url
         return f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
 
     @computed_field
     @property
+    def database_requires_ssl(self) -> bool:
+        """Check if the database connection requires SSL (for Neon, etc.)."""
+        if self.database_url_override:
+            return "sslmode=require" in self.database_url_override or "ssl=require" in self.database_url_override
+        return False
+
+    @computed_field
+    @property
     def database_url_sync(self) -> str:
-        """Construct sync database URL (for Alembic)."""
+        """Get sync database URL (for Alembic). Uses override if provided, otherwise constructs from parts."""
+        if self.database_url_override:
+            # Ensure we use the sync postgresql:// scheme
+            url = self.database_url_override
+            if url.startswith("postgres://"):
+                url = url.replace("postgres://", "postgresql://", 1)
+            elif url.startswith("postgresql+asyncpg://"):
+                url = url.replace("postgresql+asyncpg://", "postgresql://", 1)
+            return url
         return f"postgresql://{self.postgres_user}:{self.postgres_password}@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
 
     # Auth / JWT
@@ -50,6 +80,11 @@ class Settings(BaseSettings):
 
     # CORS
     cors_origins: list[str] = ["http://localhost:3000"]
+
+    # Cookies
+    # Set to true when frontend and backend are on different domains (e.g., Vercel + Render)
+    # This uses samesite="none" + secure=True instead of samesite="lax"
+    cookie_cross_domain: bool = False
 
 
 @lru_cache

@@ -1,8 +1,12 @@
+import { useState, useEffect } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { GoogleLogin } from '@react-oauth/google'
+import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google'
 import { Compass } from 'lucide-react'
 
 import { useAuth, useGoogleCredentialLogin } from '../lib/auth'
+
+// Google Client ID from environment
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || ''
 
 export const Route = createFileRoute('/')({
   component: LandingPage,
@@ -12,6 +16,12 @@ function LandingPage() {
   const { isAuthenticated, isLoading } = useAuth()
   const navigate = useNavigate()
   const googleLogin = useGoogleCredentialLogin()
+  const [mounted, setMounted] = useState(false)
+
+  // Only render Google login on client
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   // Redirect to dashboard if already authenticated
   if (isAuthenticated && !isLoading) {
@@ -39,25 +49,27 @@ function LandingPage() {
 
         {/* Login */}
         <div className="space-y-4">
-          {isLoading ? (
+          {isLoading || !mounted ? (
             <div className="text-sm text-muted-foreground">loading...</div>
           ) : (
             <div className="flex justify-center">
-              <GoogleLogin
-                onSuccess={(credentialResponse) => {
-                  if (credentialResponse.credential) {
-                    googleLogin.mutate(credentialResponse.credential)
-                  }
-                }}
-                onError={() => {
-                  console.error('login failed')
-                }}
-                theme="outline"
-                size="large"
-                width="280"
-                text="continue_with"
-                shape="rectangular"
-              />
+              <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+                <GoogleLogin
+                  onSuccess={(credentialResponse) => {
+                    if (credentialResponse.credential) {
+                      googleLogin.mutate(credentialResponse.credential)
+                    }
+                  }}
+                  onError={() => {
+                    console.error('login failed')
+                  }}
+                  theme="outline"
+                  size="large"
+                  width="280"
+                  text="continue_with"
+                  shape="rectangular"
+                />
+              </GoogleOAuthProvider>
             </div>
           )}
 

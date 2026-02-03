@@ -137,12 +137,13 @@ async def google_login(
     expires_in = settings.jwt_expire_minutes * 60
 
     # Set HttpOnly cookie (recommended for web apps)
+    # For cross-domain deployments (e.g., Vercel + Render), use samesite="none" + secure=True
     response.set_cookie(
         key="access_token",
         value=access_token,
         httponly=True,
-        secure=settings.environment != "development",  # HTTPS only in prod
-        samesite="lax",
+        secure=settings.cookie_cross_domain or settings.environment != "development",
+        samesite="none" if settings.cookie_cross_domain else "lax",
         max_age=expires_in,
     )
 
@@ -164,8 +165,8 @@ async def logout(response: Response) -> None:
     response.delete_cookie(
         key="access_token",
         httponly=True,
-        secure=settings.environment != "development",
-        samesite="lax",
+        secure=settings.cookie_cross_domain or settings.environment != "development",
+        samesite="none" if settings.cookie_cross_domain else "lax",
     )
 
 
