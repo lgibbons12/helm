@@ -179,7 +179,7 @@ export interface NoteListParams {
 // Assignment Types
 // =============================================================================
 
-export type AssignmentStatus = 'not_started' | 'in_progress' | 'done'
+export type AssignmentStatus = 'not_started' | 'in_progress' | 'almost_done' | 'finished'
 export type AssignmentType = 'pset' | 'reading' | 'project' | 'quiz' | 'other'
 export type DayOfWeek = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday'
 
@@ -289,4 +289,87 @@ export const assignmentsApi = {
     api.patch<Assignment>(`/assignments/${id}`, data),
 
   delete: (id: string) => api.delete(`/assignments/${id}`),
+}
+
+// =============================================================================
+// Transaction Types
+// =============================================================================
+
+export interface Transaction {
+  id: string
+  user_id: string
+  date: string
+  amount_signed: number
+  merchant?: string
+  category?: string
+  note?: string
+  is_income: boolean
+  is_weekly: boolean
+  income_source?: string
+  created_at: string
+}
+
+export interface TransactionCreate {
+  date: string
+  amount_signed: number
+  merchant?: string
+  category?: string
+  note?: string
+  is_income: boolean
+  is_weekly?: boolean
+  income_source?: string
+}
+
+export interface TransactionSummary {
+  total_income: number
+  total_expenses: number
+  net: number
+}
+
+export interface TransactionBreakdown {
+  weekly: number
+  large: number
+  total: number
+  weekly_pct: number
+  large_pct: number
+}
+
+export interface TransactionTrendPoint {
+  date: string
+  expenses: number
+  income: number
+}
+
+export interface WeeklyAverage {
+  weekly_average: number
+  weeks_tracked: number
+  total_expenses: number
+}
+
+export const transactionsApi = {
+  list: (params?: {
+    date_from?: string
+    date_to?: string
+    category?: string
+    is_income?: boolean
+  }) => api.get<Transaction[]>(`/transactions${buildQueryString(params)}`),
+
+  create: (data: TransactionCreate) =>
+    api.post<Transaction>('/transactions', data),
+
+  get: (id: string) => api.get<Transaction>(`/transactions/${id}`),
+
+  delete: (id: string) => api.delete(`/transactions/${id}`),
+
+  getSummary: (params?: { date_from?: string; date_to?: string }) =>
+    api.get<TransactionSummary>(`/transactions/summary${buildQueryString(params)}`),
+
+  getBreakdown: () =>
+    api.get<TransactionBreakdown>('/transactions/stats/breakdown'),
+
+  getTrend: (days?: number) =>
+    api.get<TransactionTrendPoint[]>(`/transactions/stats/trend${days ? `?days=${days}` : ''}`),
+
+  getWeeklyAverage: () =>
+    api.get<WeeklyAverage>('/transactions/stats/weekly-average'),
 }

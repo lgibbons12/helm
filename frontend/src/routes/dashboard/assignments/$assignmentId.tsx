@@ -10,7 +10,8 @@ import {
   Trash2,
   CheckCircle2,
   Circle,
-  Loader2,
+  CircleDot,
+  CircleDashed,
 } from 'lucide-react'
 import { format } from 'date-fns'
 
@@ -36,10 +37,14 @@ import {
 
 export const Route = createFileRoute('/dashboard/assignments/$assignmentId')({
   component: AssignmentDetailPage,
+  validateSearch: (search: Record<string, unknown>) => ({
+    from: (search.from as string) || undefined,
+  }),
 })
 
 function AssignmentDetailPage() {
   const { assignmentId } = Route.useParams()
+  const { from } = Route.useSearch()
   const queryClient = useQueryClient()
   const [selectedNote, setSelectedNote] = useState<Note | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -127,15 +132,22 @@ function AssignmentDetailPage() {
     return <AssignmentDetailError />
   }
 
-  const isDone = assignment.status === 'done'
+  const isFinished = assignment.status === 'finished'
+
+  // Cycle through statuses: not_started -> in_progress -> almost_done -> finished -> not_started
+  const getNextStatus = (current: AssignmentStatus): AssignmentStatus => {
+    const cycle: AssignmentStatus[] = ['not_started', 'in_progress', 'almost_done', 'finished']
+    const currentIndex = cycle.indexOf(current)
+    return cycle[(currentIndex + 1) % cycle.length]
+  }
 
   return (
     <div className="space-y-6">
       {/* Back button */}
-      <Link to="/dashboard/assignments">
+      <Link to={from === 'board' ? '/dashboard/board' : '/dashboard/assignments'}>
         <Button variant="ghost" size="sm" className="gap-1 lowercase">
           <ArrowLeft className="w-4 h-4" />
-          back to assignments
+          back to {from === 'board' ? 'board' : 'assignments'}
         </Button>
       </Link>
 
@@ -144,22 +156,16 @@ function AssignmentDetailPage() {
         <div className="flex items-start gap-4">
           {/* Status toggle */}
           <button
-            onClick={() => {
-              const nextStatus: AssignmentStatus =
-                assignment.status === 'not_started'
-                  ? 'in_progress'
-                  : assignment.status === 'in_progress'
-                    ? 'done'
-                    : 'not_started'
-              updateStatus.mutate(nextStatus)
-            }}
+            onClick={() => updateStatus.mutate(getNextStatus(assignment.status))}
             className="mt-1 flex-shrink-0"
             disabled={updateStatus.isPending}
           >
-            {isDone ? (
-              <CheckCircle2 className="w-6 h-6 text-success" />
+            {isFinished ? (
+              <CheckCircle2 className="w-6 h-6 text-green-500" />
+            ) : assignment.status === 'almost_done' ? (
+              <CircleDot className="w-6 h-6 text-blue-400" />
             ) : assignment.status === 'in_progress' ? (
-              <Loader2 className="w-6 h-6 text-accent animate-spin" />
+              <CircleDashed className="w-6 h-6 text-amber-400" />
             ) : (
               <Circle className="w-6 h-6 text-muted-foreground hover:text-foreground transition-colors" />
             )}
@@ -167,7 +173,7 @@ function AssignmentDetailPage() {
 
           <div className="flex-1 space-y-3">
             <div>
-              <h1 className={`text-2xl font-bold text-foreground lowercase ${isDone ? 'line-through' : ''}`}>
+              <h1 className={`text-2xl font-bold text-foreground lowercase ${isFinished ? 'line-through' : ''}`}>
                 {assignment.title}
               </h1>
               <div className="flex items-center gap-2 mt-1">
@@ -175,10 +181,10 @@ function AssignmentDetailPage() {
                   {assignment.type}
                 </Badge>
                 <Badge
-                  variant={isDone ? 'secondary' : assignment.status === 'in_progress' ? 'default' : 'outline'}
+                  variant={isFinished ? 'secondary' : assignment.status === 'almost_done' || assignment.status === 'in_progress' ? 'default' : 'outline'}
                   className="text-xs lowercase"
                 >
-                  {assignment.status.replace('_', ' ')}
+                  {assignment.status.replace(/_/g, ' ')}
                 </Badge>
               </div>
             </div>

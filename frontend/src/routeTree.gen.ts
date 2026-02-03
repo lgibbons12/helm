@@ -12,8 +12,10 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DashboardIndexRouteImport } from './routes/dashboard/index'
+import { Route as DashboardPlanRouteImport } from './routes/dashboard/plan'
 import { Route as DashboardNotesRouteImport } from './routes/dashboard/notes'
 import { Route as DashboardClassesRouteImport } from './routes/dashboard/classes'
+import { Route as DashboardBudgetRouteImport } from './routes/dashboard/budget'
 import { Route as DashboardBoardRouteImport } from './routes/dashboard/board'
 import { Route as DashboardAssignmentsRouteImport } from './routes/dashboard/assignments'
 import { Route as DashboardClassesIndexRouteImport } from './routes/dashboard/classes/index'
@@ -36,6 +38,11 @@ const DashboardIndexRoute = DashboardIndexRouteImport.update({
   path: '/',
   getParentRoute: () => DashboardRoute,
 } as any)
+const DashboardPlanRoute = DashboardPlanRouteImport.update({
+  id: '/plan',
+  path: '/plan',
+  getParentRoute: () => DashboardRoute,
+} as any)
 const DashboardNotesRoute = DashboardNotesRouteImport.update({
   id: '/notes',
   path: '/notes',
@@ -44,6 +51,11 @@ const DashboardNotesRoute = DashboardNotesRouteImport.update({
 const DashboardClassesRoute = DashboardClassesRouteImport.update({
   id: '/classes',
   path: '/classes',
+  getParentRoute: () => DashboardRoute,
+} as any)
+const DashboardBudgetRoute = DashboardBudgetRouteImport.update({
+  id: '/budget',
+  path: '/budget',
   getParentRoute: () => DashboardRoute,
 } as any)
 const DashboardBoardRoute = DashboardBoardRouteImport.update({
@@ -84,8 +96,10 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof DashboardRouteWithChildren
   '/dashboard/assignments': typeof DashboardAssignmentsRouteWithChildren
   '/dashboard/board': typeof DashboardBoardRoute
+  '/dashboard/budget': typeof DashboardBudgetRoute
   '/dashboard/classes': typeof DashboardClassesRouteWithChildren
   '/dashboard/notes': typeof DashboardNotesRoute
+  '/dashboard/plan': typeof DashboardPlanRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/dashboard/assignments/$assignmentId': typeof DashboardAssignmentsAssignmentIdRoute
   '/dashboard/classes/$classId': typeof DashboardClassesClassIdRoute
@@ -95,7 +109,9 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/dashboard/board': typeof DashboardBoardRoute
+  '/dashboard/budget': typeof DashboardBudgetRoute
   '/dashboard/notes': typeof DashboardNotesRoute
+  '/dashboard/plan': typeof DashboardPlanRoute
   '/dashboard': typeof DashboardIndexRoute
   '/dashboard/assignments/$assignmentId': typeof DashboardAssignmentsAssignmentIdRoute
   '/dashboard/classes/$classId': typeof DashboardClassesClassIdRoute
@@ -108,8 +124,10 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRouteWithChildren
   '/dashboard/assignments': typeof DashboardAssignmentsRouteWithChildren
   '/dashboard/board': typeof DashboardBoardRoute
+  '/dashboard/budget': typeof DashboardBudgetRoute
   '/dashboard/classes': typeof DashboardClassesRouteWithChildren
   '/dashboard/notes': typeof DashboardNotesRoute
+  '/dashboard/plan': typeof DashboardPlanRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/dashboard/assignments/$assignmentId': typeof DashboardAssignmentsAssignmentIdRoute
   '/dashboard/classes/$classId': typeof DashboardClassesClassIdRoute
@@ -123,8 +141,10 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/dashboard/assignments'
     | '/dashboard/board'
+    | '/dashboard/budget'
     | '/dashboard/classes'
     | '/dashboard/notes'
+    | '/dashboard/plan'
     | '/dashboard/'
     | '/dashboard/assignments/$assignmentId'
     | '/dashboard/classes/$classId'
@@ -134,7 +154,9 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/dashboard/board'
+    | '/dashboard/budget'
     | '/dashboard/notes'
+    | '/dashboard/plan'
     | '/dashboard'
     | '/dashboard/assignments/$assignmentId'
     | '/dashboard/classes/$classId'
@@ -146,8 +168,10 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/dashboard/assignments'
     | '/dashboard/board'
+    | '/dashboard/budget'
     | '/dashboard/classes'
     | '/dashboard/notes'
+    | '/dashboard/plan'
     | '/dashboard/'
     | '/dashboard/assignments/$assignmentId'
     | '/dashboard/classes/$classId'
@@ -183,6 +207,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardIndexRouteImport
       parentRoute: typeof DashboardRoute
     }
+    '/dashboard/plan': {
+      id: '/dashboard/plan'
+      path: '/plan'
+      fullPath: '/dashboard/plan'
+      preLoaderRoute: typeof DashboardPlanRouteImport
+      parentRoute: typeof DashboardRoute
+    }
     '/dashboard/notes': {
       id: '/dashboard/notes'
       path: '/notes'
@@ -195,6 +226,13 @@ declare module '@tanstack/react-router' {
       path: '/classes'
       fullPath: '/dashboard/classes'
       preLoaderRoute: typeof DashboardClassesRouteImport
+      parentRoute: typeof DashboardRoute
+    }
+    '/dashboard/budget': {
+      id: '/dashboard/budget'
+      path: '/budget'
+      fullPath: '/dashboard/budget'
+      preLoaderRoute: typeof DashboardBudgetRouteImport
       parentRoute: typeof DashboardRoute
     }
     '/dashboard/board': {
@@ -271,16 +309,20 @@ const DashboardClassesRouteWithChildren =
 interface DashboardRouteChildren {
   DashboardAssignmentsRoute: typeof DashboardAssignmentsRouteWithChildren
   DashboardBoardRoute: typeof DashboardBoardRoute
+  DashboardBudgetRoute: typeof DashboardBudgetRoute
   DashboardClassesRoute: typeof DashboardClassesRouteWithChildren
   DashboardNotesRoute: typeof DashboardNotesRoute
+  DashboardPlanRoute: typeof DashboardPlanRoute
   DashboardIndexRoute: typeof DashboardIndexRoute
 }
 
 const DashboardRouteChildren: DashboardRouteChildren = {
   DashboardAssignmentsRoute: DashboardAssignmentsRouteWithChildren,
   DashboardBoardRoute: DashboardBoardRoute,
+  DashboardBudgetRoute: DashboardBudgetRoute,
   DashboardClassesRoute: DashboardClassesRouteWithChildren,
   DashboardNotesRoute: DashboardNotesRoute,
+  DashboardPlanRoute: DashboardPlanRoute,
   DashboardIndexRoute: DashboardIndexRoute,
 }
 

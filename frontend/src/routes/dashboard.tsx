@@ -2,7 +2,6 @@ import { createFileRoute, Outlet, Link, useNavigate } from '@tanstack/react-rout
 import {
   Compass,
   BookOpen,
-  Calendar,
   FileText,
   Wallet,
   Settings,
@@ -11,6 +10,7 @@ import {
   X,
   GraduationCap,
   LayoutGrid,
+  ClipboardList,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -25,7 +25,7 @@ const navItems = [
   { to: '/dashboard/classes', icon: GraduationCap, label: 'classes' },
   { to: '/dashboard/assignments', icon: BookOpen, label: 'assignments' },
   { to: '/dashboard/board', icon: LayoutGrid, label: 'board' },
-  { to: '/dashboard/schedule', icon: Calendar, label: 'schedule' },
+  { to: '/dashboard/plan', icon: ClipboardList, label: 'plan' },
   { to: '/dashboard/notes', icon: FileText, label: 'notes' },
   { to: '/dashboard/budget', icon: Wallet, label: 'budget' },
 ]

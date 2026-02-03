@@ -18,6 +18,8 @@ class TransactionBase(BaseSchema):
     category: str | None = Field(None, max_length=100)
     note: str | None = None
     is_income: bool = False
+    is_weekly: bool = False
+    income_source: str | None = Field(None, max_length=50)
 
     @model_validator(mode="after")
     def validate_amount_sign(self) -> "TransactionBase":

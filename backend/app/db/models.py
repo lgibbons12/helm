@@ -37,11 +37,12 @@ if TYPE_CHECKING:
 
 
 class AssignmentStatus(str, PyEnum):
-    """Status of an assignment."""
+    """Progress status of an assignment."""
 
     NOT_STARTED = "not_started"
     IN_PROGRESS = "in_progress"
-    DONE = "done"
+    ALMOST_DONE = "almost_done"
+    FINISHED = "finished"
 
 
 class AssignmentType(str, PyEnum):
@@ -267,7 +268,7 @@ class Assignment(Base):
     )
     estimated_minutes: Mapped[Optional[int]] = mapped_column(nullable=True)
     status: Mapped[str] = mapped_column(
-        PGENUM("not_started", "in_progress", "done", name="assignment_status", create_type=False),
+        PGENUM("not_started", "in_progress", "almost_done", "finished", name="assignment_status", create_type=False),
         nullable=False,
         default="not_started",
     )
@@ -446,6 +447,8 @@ class Transaction(Base):
     category: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     is_income: Mapped[bool] = mapped_column(default=False, nullable=False)
+    is_weekly: Mapped[bool] = mapped_column(default=False, nullable=False)
+    income_source: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=text("NOW()"), nullable=False
     )

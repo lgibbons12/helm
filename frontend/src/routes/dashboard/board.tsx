@@ -19,6 +19,10 @@ import {
   ChevronRight,
   Clock,
   AlertCircle,
+  Circle,
+  CircleDashed,
+  CircleDot,
+  CheckCircle2,
 } from 'lucide-react'
 import { format, isPast, isToday, parseISO } from 'date-fns'
 
@@ -27,6 +31,7 @@ import {
   classesApi,
   type Assignment,
   type AssignmentUpdate,
+  type AssignmentStatus,
   type DayOfWeek,
   type Class,
 } from '../../lib/api'
@@ -114,11 +119,14 @@ function BoardPage() {
     },
   })
 
+  // Filter out finished assignments - board only shows active work
+  const activeAssignments = assignments.filter((a) => a.status !== 'finished')
+
   // Group assignments by day
-  const backlogAssignments = assignments.filter((a) => !a.planned_start_day)
+  const backlogAssignments = activeAssignments.filter((a) => !a.planned_start_day)
   const assignmentsByDay = ALL_DAYS.reduce(
     (acc, day) => {
-      acc[day] = assignments.filter((a) => a.planned_start_day === day)
+      acc[day] = activeAssignments.filter((a) => a.planned_start_day === day)
       return acc
     },
     {} as Record<DayOfWeek, Assignment[]>
@@ -149,11 +157,19 @@ function BoardPage() {
     if (!over) return
 
     const assignmentId = active.id as string
-    const targetDay = over.id as DayOfWeek | 'backlog'
+    const targetId = over.id as string
     const assignment = assignments.find((a) => a.id === assignmentId)
     if (!assignment) return
 
-    const newDay = targetDay === 'backlog' ? null : targetDay
+    // Determine the new day based on drop target
+    let newDay: DayOfWeek | null = null
+    if (targetId === 'backlog') {
+      newDay = null
+    } else if (targetId === 'weekend') {
+      newDay = 'saturday' // Weekend drops default to saturday
+    } else {
+      newDay = targetId as DayOfWeek
+    }
 
     if (assignment.planned_start_day !== newDay) {
       updateAssignment.mutate({
@@ -165,8 +181,17 @@ function BoardPage() {
 
   const handleCardClick = (assignmentId: string) => {
     if (!activeId) {
-      navigate({ to: '/dashboard/assignments/$assignmentId', params: { assignmentId } })
+      navigate({ to: '/dashboard/assignments/$assignmentId', params: { assignmentId }, search: { from: 'board' } })
     }
+  }
+
+  // Status update handler for clicking status on cards
+  const handleStatusClick = (e: React.MouseEvent, assignmentId: string, currentStatus: AssignmentStatus) => {
+    e.stopPropagation() // Prevent card navigation
+    const statusCycle: AssignmentStatus[] = ['not_started', 'in_progress', 'almost_done', 'finished']
+    const currentIndex = statusCycle.indexOf(currentStatus)
+    const nextStatus = statusCycle[(currentIndex + 1) % statusCycle.length]
+    updateAssignment.mutate({ id: assignmentId, data: { status: nextStatus } })
   }
 
   if (isLoading) {
@@ -199,24 +224,18 @@ function BoardPage() {
               assignments={assignmentsByDay[day]}
               classMap={classMap}
               onCardClick={handleCardClick}
+              onStatusClick={handleStatusClick}
             />
           ))}
         </div>
 
-        {/* Weekend row */}
-        <div className="grid grid-cols-5 gap-3">
-          {WEEKEND.map((day) => (
-            <DayColumn
-              key={day}
-              day={day}
-              assignments={assignmentsByDay[day]}
-              classMap={classMap}
-              onCardClick={handleCardClick}
-            />
-          ))}
-          {/* Empty spacer columns */}
-          <div className="col-span-3" />
-        </div>
+        {/* Weekend - wide catchall */}
+        <WeekendColumn
+          assignments={[...assignmentsByDay.saturday, ...assignmentsByDay.sunday]}
+          classMap={classMap}
+          onCardClick={handleCardClick}
+          onStatusClick={handleStatusClick}
+        />
 
         {/* Backlog - subtle collapsible */}
         {backlogAssignments.length > 0 && (
@@ -240,6 +259,7 @@ function BoardPage() {
                 assignments={backlogAssignments}
                 classMap={classMap}
                 onCardClick={handleCardClick}
+                onStatusClick={handleStatusClick}
               />
             )}
           </div>
@@ -247,7 +267,7 @@ function BoardPage() {
 
         {/* Empty backlog drop zone when no items */}
         {backlogAssignments.length === 0 && (
-          <BacklogDropZone assignments={[]} classMap={classMap} onCardClick={handleCardClick} />
+          <BacklogDropZone assignments={[]} classMap={classMap} onCardClick={handleCardClick} onStatusClick={handleStatusClick} />
         )}
 
         {/* Drag overlay */}
@@ -269,10 +289,12 @@ function BacklogDropZone({
   assignments,
   classMap,
   onCardClick,
+  onStatusClick,
 }: {
   assignments: Assignment[]
   classMap: Record<string, Class>
   onCardClick: (id: string) => void
+  onStatusClick: (e: React.MouseEvent, id: string, status: AssignmentStatus) => void
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: 'backlog',
@@ -296,6 +318,7 @@ function BacklogDropZone({
             assignment={assignment}
             classMap={classMap}
             onCardClick={onCardClick}
+            onStatusClick={onStatusClick}
           />
         ))
       )}
@@ -312,11 +335,13 @@ function DayColumn({
   assignments,
   classMap,
   onCardClick,
+  onStatusClick,
 }: {
   day: DayOfWeek
   assignments: Assignment[]
   classMap: Record<string, Class>
   onCardClick: (id: string) => void
+  onStatusClick: (e: React.MouseEvent, id: string, status: AssignmentStatus) => void
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: day,
@@ -359,11 +384,84 @@ function DayColumn({
             assignment={assignment}
             classMap={classMap}
             onCardClick={onCardClick}
+            onStatusClick={onStatusClick}
           />
         ))}
 
         {assignments.length === 0 && (
           <div className="h-full flex items-center justify-center">
+            <span className="text-xs text-muted-foreground/40 lowercase">
+              drop here
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// =============================================================================
+// Weekend Column
+// =============================================================================
+
+function WeekendColumn({
+  assignments,
+  classMap,
+  onCardClick,
+  onStatusClick,
+}: {
+  assignments: Assignment[]
+  classMap: Record<string, Class>
+  onCardClick: (id: string) => void
+  onStatusClick: (e: React.MouseEvent, id: string, status: AssignmentStatus) => void
+}) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: 'weekend',
+  })
+
+  // Check if today is weekend
+  const today = new Date()
+  const dayOfWeek = today.getDay()
+  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`glass rounded-lg p-3 min-h-[120px] transition-all ${
+        isOver
+          ? 'bg-accent/10 ring-2 ring-accent/50'
+          : ''
+      } ${isWeekend ? 'ring-2 ring-accent/50' : ''}`}
+    >
+      <div className="flex items-center justify-between mb-3 pb-2 border-b border-border/30">
+        <span
+          className={`text-sm font-medium lowercase ${
+            isWeekend ? 'text-accent' : 'text-foreground'
+          }`}
+        >
+          weekend
+        </span>
+        {assignments.length > 0 && (
+          <span className="text-xs text-muted-foreground">
+            {assignments.length}
+          </span>
+        )}
+      </div>
+
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {assignments.map((assignment) => (
+          <div key={assignment.id} className="flex-shrink-0 w-48">
+            <DraggableCard
+              assignment={assignment}
+              classMap={classMap}
+              onCardClick={onCardClick}
+              onStatusClick={onStatusClick}
+            />
+          </div>
+        ))}
+
+        {assignments.length === 0 && (
+          <div className="flex-1 flex items-center justify-center py-4">
             <span className="text-xs text-muted-foreground/40 lowercase">
               drop here
             </span>
@@ -382,10 +480,12 @@ function DraggableCard({
   assignment,
   classMap,
   onCardClick,
+  onStatusClick,
 }: {
   assignment: Assignment
   classMap: Record<string, Class>
   onCardClick: (id: string) => void
+  onStatusClick: (e: React.MouseEvent, id: string, status: AssignmentStatus) => void
 }) {
   const {
     attributes,
@@ -412,7 +512,7 @@ function DraggableCard({
       className={`${isDragging ? 'opacity-40' : ''} touch-none`}
       onClick={() => onCardClick(assignment.id)}
     >
-      <BoardCard assignment={assignment} classMap={classMap} />
+      <BoardCard assignment={assignment} classMap={classMap} onStatusClick={onStatusClick} />
     </div>
   )
 }
@@ -425,39 +525,66 @@ interface BoardCardProps {
   assignment: Assignment
   classMap: Record<string, Class>
   isDragging?: boolean
+  onStatusClick?: (e: React.MouseEvent, id: string, status: AssignmentStatus) => void
 }
 
-function BoardCard({ assignment, classMap, isDragging }: BoardCardProps) {
+function BoardCard({ assignment, classMap, isDragging, onStatusClick }: BoardCardProps) {
   const dueDate = assignment.due_date ? parseISO(assignment.due_date) : null
   const isOverdue = dueDate && isPast(dueDate) && !isToday(dueDate)
   const isDueToday = dueDate && isToday(dueDate)
-  const isDone = assignment.status === 'done'
   const assignedClass = assignment.class_id ? classMap[assignment.class_id] : null
+
+  const StatusIcon = {
+    not_started: Circle,
+    in_progress: CircleDashed,
+    almost_done: CircleDot,
+    finished: CheckCircle2,
+  }[assignment.status]
+
+  const statusColor = {
+    not_started: 'text-muted-foreground hover:text-foreground',
+    in_progress: 'text-amber-400 hover:text-amber-300',
+    almost_done: 'text-blue-400 hover:text-blue-300',
+    finished: 'text-green-500 hover:text-green-400',
+  }[assignment.status]
 
   return (
     <div
       className={`p-2.5 rounded-lg border bg-card/80 backdrop-blur-sm cursor-grab active:cursor-grabbing transition-all ${
         isDragging ? 'shadow-lg ring-2 ring-accent scale-105' : 'hover:bg-card'
-      } ${isDone ? 'opacity-40' : ''}`}
+      }`}
       style={{
         borderLeftWidth: '3px',
         borderLeftColor: assignedClass?.color || 'var(--border)',
       }}
     >
-      {/* Class name */}
-      {assignedClass && (
-        <p className="text-[10px] text-muted-foreground lowercase mb-1 truncate">
-          {assignedClass.code || assignedClass.name}
-        </p>
-      )}
+      <div className="flex items-start gap-2">
+        {/* Status toggle */}
+        <button
+          onClick={(e) => onStatusClick?.(e, assignment.id, assignment.status)}
+          className={`flex-shrink-0 transition-colors ${statusColor}`}
+          title={`Status: ${assignment.status.replace(/_/g, ' ')}`}
+        >
+          <StatusIcon className="w-4 h-4" />
+        </button>
 
-      {/* Title */}
-      <p className={`text-sm font-medium line-clamp-2 ${isDone ? 'line-through' : ''}`}>
-        {assignment.title}
-      </p>
+        <div className="flex-1 min-w-0">
+          {/* Class name */}
+          {assignedClass && (
+            <p className="text-[10px] text-muted-foreground lowercase truncate">
+              {assignedClass.code || assignedClass.name}
+            </p>
+          )}
+
+          {/* Title */}
+          <p className="text-sm font-medium line-clamp-2">
+            {assignment.title}
+          </p>
+        </div>
+      </div>
 
       {/* Metadata row */}
-      <div className="flex items-center gap-2 mt-2 text-xs">
+      <div className="flex items-center gap-2 mt-2 text-xs pl-6">
         {dueDate && (
           <span
             className={`lowercase ${

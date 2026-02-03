@@ -9,7 +9,7 @@ from pydantic import Field
 from app.schemas.base import BaseSchema
 
 # Type aliases for enums (used as literals for API validation)
-AssignmentStatusType = Literal["not_started", "in_progress", "done"]
+AssignmentStatusType = Literal["not_started", "in_progress", "almost_done", "finished"]
 AssignmentTypeType = Literal["pset", "reading", "project", "quiz", "other"]
 DayOfWeekType = Literal["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
 
