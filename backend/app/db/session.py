@@ -1,5 +1,6 @@
 """Database session management."""
 
+import ssl
 from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -8,6 +9,14 @@ from app.config import get_settings
 
 settings = get_settings()
 
+# Build connect_args for SSL if needed (e.g., Neon)
+connect_args: dict = {}
+if settings.database_requires_ssl:
+    ssl_context = ssl.create_default_context()
+    ssl_context.check_hostname = False
+    ssl_context.verify_mode = ssl.CERT_NONE
+    connect_args["ssl"] = ssl_context
+
 # Create async engine
 engine = create_async_engine(
     settings.database_url,
@@ -15,6 +24,7 @@ engine = create_async_engine(
     pool_pre_ping=True,
     pool_size=5,
     max_overflow=10,
+    connect_args=connect_args,
 )
 
 # Session factory

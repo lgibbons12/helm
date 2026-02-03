@@ -1,7 +1,6 @@
 import { HeadContent, Outlet, Scripts, createRootRoute } from '@tanstack/react-router'
 import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 import { TanStackDevtools } from '@tanstack/react-devtools'
-import { GoogleOAuthProvider } from '@react-oauth/google'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 import { AuthProvider } from '../lib/auth'
@@ -17,9 +16,6 @@ const queryClient = new QueryClient({
     },
   },
 })
-
-// Google Client ID from environment
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || ''
 
 export const Route = createRootRoute({
   head: () => ({
@@ -40,6 +36,11 @@ export const Route = createRootRoute({
       },
     ],
     links: [
+      {
+        rel: 'icon',
+        type: 'image/svg+xml',
+        href: '/favicon.svg',
+      },
       {
         rel: 'preconnect',
         href: 'https://fonts.googleapis.com',
@@ -78,26 +79,24 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <HeadContent />
       </head>
       <body className="min-h-screen bg-background antialiased">
-        <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-          <QueryClientProvider client={queryClient}>
-            <AuthProvider>
-              {children}
-            </AuthProvider>
-            {import.meta.env.DEV && (
-              <TanStackDevtools
-                config={{
-                  position: 'bottom-right',
-                }}
-                plugins={[
-                  {
-                    name: 'Tanstack Router',
-                    render: <TanStackRouterDevtoolsPanel />,
-                  },
-                ]}
-              />
-            )}
-          </QueryClientProvider>
-        </GoogleOAuthProvider>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            {children}
+          </AuthProvider>
+          {import.meta.env.DEV && (
+            <TanStackDevtools
+              config={{
+                position: 'bottom-right',
+              }}
+              plugins={[
+                {
+                  name: 'Tanstack Router',
+                  render: <TanStackRouterDevtoolsPanel />,
+                },
+              ]}
+            />
+          )}
+        </QueryClientProvider>
         <Scripts />
       </body>
     </html>

@@ -165,6 +165,105 @@ export interface AuthResponse {
 }
 
 // =============================================================================
+// Note Types
+// =============================================================================
+
+export interface Note {
+  id: string
+  user_id: string
+  class_id: string | null
+  assignment_id: string | null
+  title: string
+  content_text: string | null  // Markdown content
+  tags: string[]
+  created_at: string
+  updated_at: string
+}
+
+export interface NoteCreate {
+  title?: string
+  content_text?: string | null
+  tags?: string[]
+  class_id?: string | null
+  assignment_id?: string | null
+}
+
+export interface NoteUpdate {
+  title?: string
+  content_text?: string | null
+  tags?: string[]
+}
+
+export interface NoteListParams {
+  class_id?: string
+  assignment_id?: string
+  tag?: string
+  q?: string
+  standalone?: boolean
+}
+
+// =============================================================================
+// Assignment Types
+// =============================================================================
+
+export type AssignmentStatus = 'not_started' | 'in_progress' | 'almost_done' | 'finished'
+export type AssignmentType = 'pset' | 'reading' | 'project' | 'quiz' | 'other'
+export type DayOfWeek = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday'
+
+export interface Assignment {
+  id: string
+  user_id: string
+  class_id: string | null
+  title: string
+  type: AssignmentType
+  due_date: string | null
+  planned_start_day: DayOfWeek | null
+  estimated_minutes: number | null
+  status: AssignmentStatus
+  notes_short: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface AssignmentCreate {
+  title: string
+  type?: AssignmentType
+  class_id?: string | null
+  due_date?: string | null
+  planned_start_day?: DayOfWeek | null
+  estimated_minutes?: number | null
+  status?: AssignmentStatus
+  notes_short?: string | null
+}
+
+export interface AssignmentUpdate {
+  title?: string
+  type?: AssignmentType
+  class_id?: string | null
+  due_date?: string | null
+  planned_start_day?: DayOfWeek | null
+  estimated_minutes?: number | null
+  status?: AssignmentStatus
+  notes_short?: string | null
+}
+
+// =============================================================================
+// Helper Functions
+// =============================================================================
+
+function buildQueryString(params?: Record<string, string | boolean | undefined>): string {
+  if (!params) return ''
+  const searchParams = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== '') {
+      searchParams.append(key, String(value))
+    }
+  }
+  const queryString = searchParams.toString()
+  return queryString ? `?${queryString}` : ''
+}
+
+// =============================================================================
 // API Endpoints
 // =============================================================================
 
@@ -189,4 +288,115 @@ export const classesApi = {
     api.patch<Class>(`/classes/${id}`, data),
 
   delete: (id: string) => api.delete(`/classes/${id}`),
+}
+
+export const notesApi = {
+  list: (params?: NoteListParams) =>
+    api.get<Note[]>(`/notes${buildQueryString(params)}`),
+
+  get: (id: string) => api.get<Note>(`/notes/${id}`),
+
+  create: (data: NoteCreate) => api.post<Note>('/notes', data),
+
+  update: (id: string, data: NoteUpdate) =>
+    api.patch<Note>(`/notes/${id}`, data),
+
+  delete: (id: string) => api.delete(`/notes/${id}`),
+}
+
+export const assignmentsApi = {
+  list: (params?: { class_id?: string; status?: AssignmentStatus }) =>
+    api.get<Assignment[]>(`/assignments${buildQueryString(params)}`),
+
+  get: (id: string) => api.get<Assignment>(`/assignments/${id}`),
+
+  create: (data: AssignmentCreate) => api.post<Assignment>('/assignments', data),
+
+  update: (id: string, data: AssignmentUpdate) =>
+    api.patch<Assignment>(`/assignments/${id}`, data),
+
+  delete: (id: string) => api.delete(`/assignments/${id}`),
+}
+
+// =============================================================================
+// Transaction Types
+// =============================================================================
+
+export interface Transaction {
+  id: string
+  user_id: string
+  date: string
+  amount_signed: number
+  merchant?: string
+  category?: string
+  note?: string
+  is_income: boolean
+  is_weekly: boolean
+  income_source?: string
+  created_at: string
+}
+
+export interface TransactionCreate {
+  date: string
+  amount_signed: number
+  merchant?: string
+  category?: string
+  note?: string
+  is_income: boolean
+  is_weekly?: boolean
+  income_source?: string
+}
+
+export interface TransactionSummary {
+  total_income: number
+  total_expenses: number
+  net: number
+}
+
+export interface TransactionBreakdown {
+  weekly: number
+  large: number
+  total: number
+  weekly_pct: number
+  large_pct: number
+}
+
+export interface TransactionTrendPoint {
+  date: string
+  expenses: number
+  income: number
+}
+
+export interface WeeklyAverage {
+  weekly_average: number
+  weeks_tracked: number
+  total_expenses: number
+}
+
+export const transactionsApi = {
+  list: (params?: {
+    date_from?: string
+    date_to?: string
+    category?: string
+    is_income?: boolean
+  }) => api.get<Transaction[]>(`/transactions${buildQueryString(params)}`),
+
+  create: (data: TransactionCreate) =>
+    api.post<Transaction>('/transactions', data),
+
+  get: (id: string) => api.get<Transaction>(`/transactions/${id}`),
+
+  delete: (id: string) => api.delete(`/transactions/${id}`),
+
+  getSummary: (params?: { date_from?: string; date_to?: string }) =>
+    api.get<TransactionSummary>(`/transactions/summary${buildQueryString(params)}`),
+
+  getBreakdown: () =>
+    api.get<TransactionBreakdown>('/transactions/stats/breakdown'),
+
+  getTrend: (days?: number) =>
+    api.get<TransactionTrendPoint[]>(`/transactions/stats/trend${days ? `?days=${days}` : ''}`),
+
+  getWeeklyAverage: () =>
+    api.get<WeeklyAverage>('/transactions/stats/weekly-average'),
 }

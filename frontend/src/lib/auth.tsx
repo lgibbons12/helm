@@ -18,7 +18,6 @@ import {
   useMutation,
   useQueryClient,
 } from '@tanstack/react-query'
-import { useGoogleLogin } from '@react-oauth/google'
 import { useNavigate } from '@tanstack/react-router'
 
 import { authApi, type User, ApiError, tokenStorage } from './api'
@@ -31,7 +30,6 @@ interface AuthContextValue {
   user: User | null
   isLoading: boolean
   isAuthenticated: boolean
-  login: () => void
   logout: () => Promise<void>
   error: Error | null
 }
@@ -80,22 +78,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     staleTime: 5 * 60 * 1000, // 5 minutes
   })
 
-  // Google login mutation
-  const googleLoginMutation = useMutation({
-    mutationFn: async (accessToken: string) => {
-      // Google's useGoogleLogin returns an access_token, not id_token
-      // We need to exchange it for user info, but our backend expects id_token
-      // Actually, let's use the implicit flow which gives us the id_token directly
-      // For now, we'll need to adjust this based on the OAuth flow
-      return authApi.googleLogin(accessToken)
-    },
-    onSuccess: async () => {
-      // Refetch user after successful login
-      await queryClient.invalidateQueries({ queryKey: authKeys.user })
-      navigate({ to: '/dashboard/classes' })
-    },
-  })
-
   // Logout mutation
   const logoutMutation = useMutation({
     mutationFn: authApi.logout,
@@ -107,27 +89,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
   })
 
-  // Google OAuth login
-  // Note: We use the 'implicit' flow to get id_token directly
-  const googleLogin = useGoogleLogin({
-    flow: 'implicit',
-    onSuccess: (tokenResponse) => {
-      // For implicit flow, we get access_token, not id_token
-      // We need to use the authorization code flow instead
-      // Let's switch to the CredentialResponse approach
-      console.log('Google login success:', tokenResponse)
-      // This won't work directly - we need the id_token
-      // Let's use GoogleLogin component instead in the UI
-    },
-    onError: (error) => {
-      console.error('Google login error:', error)
-    },
-  })
-
-  const login = useCallback(() => {
-    googleLogin()
-  }, [googleLogin])
-
   const logout = useCallback(async () => {
     await logoutMutation.mutateAsync()
   }, [logoutMutation])
@@ -136,7 +97,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user: user ?? null,
     isLoading,
     isAuthenticated: !!user,
-    login,
     logout,
     error: error as Error | null,
   }
