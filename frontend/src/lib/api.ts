@@ -173,6 +173,8 @@ export interface Note {
   user_id: string
   class_id: string | null
   assignment_id: string | null
+  class_name: string | null
+  assignment_title: string | null
   title: string
   content_text: string | null  // Markdown content
   tags: string[]

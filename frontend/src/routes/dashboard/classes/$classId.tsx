@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft,
@@ -8,6 +8,7 @@ import {
   ChevronDown,
   Plus,
   Trash2,
+  Pencil,
 } from 'lucide-react'
 
 import { classesApi, notesApi, type NoteCreate } from '../../../lib/api'
@@ -15,6 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { NoteEditor } from '@/components/note-editor'
+import { EditClassDialog } from '@/components/edit-class-dialog'
 import {
   Dialog,
   DialogContent,
@@ -36,9 +38,12 @@ export const Route = createFileRoute('/dashboard/classes/$classId')({
 
 function ClassDetailPage() {
   const { classId } = Route.useParams()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deleteNoteDialogOpen, setDeleteNoteDialogOpen] = useState(false)
+  const [editClassDialogOpen, setEditClassDialogOpen] = useState(false)
+  const [deleteClassDialogOpen, setDeleteClassDialogOpen] = useState(false)
 
   // Fetch class details
   const {
@@ -92,7 +97,18 @@ function ClassDetailPage() {
       // Select another note if available
       const remainingNotes = notes.filter((n) => n.id !== selectedNoteId)
       setSelectedNoteId(remainingNotes.length > 0 ? remainingNotes[0].id : null)
-      setDeleteDialogOpen(false)
+      setDeleteNoteDialogOpen(false)
+    },
+  })
+
+  // Delete class mutation
+  const deleteClass = useMutation({
+    mutationFn: () => classesApi.delete(classId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['classes'] })
+      queryClient.invalidateQueries({ queryKey: ['notes'] })
+      queryClient.invalidateQueries({ queryKey: ['assignments'] })
+      navigate({ to: '/dashboard/classes' })
     },
   })
 
@@ -117,11 +133,16 @@ function ClassDetailPage() {
     [selectedNote, updateNote]
   )
 
-  // Handle delete confirmation
-  const handleDelete = useCallback(() => {
+  // Handle note delete confirmation
+  const handleDeleteNote = useCallback(() => {
     if (!selectedNote) return
     deleteNote.mutate(selectedNote.id)
   }, [selectedNote, deleteNote])
+
+  // Handle class delete confirmation
+  const handleDeleteClass = useCallback(() => {
+    deleteClass.mutate()
+  }, [deleteClass])
 
   if (classLoading) {
     return <ClassDetailLoading />
@@ -153,18 +174,41 @@ function ClassDetailPage() {
         )}
 
         <div className="space-y-4">
-          <div>
-            {classData.code && (
-              <Badge variant="secondary" className="text-xs lowercase mb-2">
-                {classData.code}
-              </Badge>
-            )}
-            <h1 className="text-2xl font-bold text-foreground lowercase">
-              {classData.name}
-            </h1>
-            <p className="text-sm text-muted-foreground lowercase">
-              {classData.semester}
-            </p>
+          <div className="flex items-start justify-between">
+            <div>
+              {classData.code && (
+                <Badge variant="secondary" className="text-xs lowercase mb-2">
+                  {classData.code}
+                </Badge>
+              )}
+              <h1 className="text-2xl font-bold text-foreground lowercase">
+                {classData.name}
+              </h1>
+              <p className="text-sm text-muted-foreground lowercase">
+                {classData.semester}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setEditClassDialogOpen(true)}
+                className="gap-1 lowercase"
+              >
+                <Pencil className="w-4 h-4" />
+                edit
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setDeleteClassDialogOpen(true)}
+                className="gap-1 text-destructive hover:text-destructive lowercase"
+              >
+                <Trash2 className="w-4 h-4" />
+                delete
+              </Button>
+            </div>
           </div>
 
           {classData.instructor && (
@@ -250,7 +294,7 @@ function ClassDetailPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setDeleteDialogOpen(true)}
+                onClick={() => setDeleteNoteDialogOpen(true)}
                 className="gap-1 text-destructive hover:text-destructive lowercase"
               >
                 <Trash2 className="w-4 h-4" />
@@ -289,8 +333,8 @@ function ClassDetailPage() {
         )}
       </div>
 
-      {/* Delete confirmation dialog */}
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      {/* Delete note confirmation dialog */}
+      <Dialog open={deleteNoteDialogOpen} onOpenChange={setDeleteNoteDialogOpen}>
         <DialogContent className="glass-strong border-0">
           <DialogHeader>
             <DialogTitle className="lowercase">delete note</DialogTitle>
@@ -301,14 +345,14 @@ function ClassDetailPage() {
           <div className="flex justify-end gap-2 mt-4">
             <Button
               variant="outline"
-              onClick={() => setDeleteDialogOpen(false)}
+              onClick={() => setDeleteNoteDialogOpen(false)}
               className="lowercase"
             >
               cancel
             </Button>
             <Button
               variant="destructive"
-              onClick={handleDelete}
+              onClick={handleDeleteNote}
               disabled={deleteNote.isPending}
               className="lowercase"
             >
@@ -317,6 +361,46 @@ function ClassDetailPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Delete class confirmation dialog */}
+      <Dialog open={deleteClassDialogOpen} onOpenChange={setDeleteClassDialogOpen}>
+        <DialogContent className="glass-strong border-0">
+          <DialogHeader>
+            <DialogTitle className="lowercase">delete class</DialogTitle>
+            <DialogDescription className="lowercase">
+              are you sure you want to delete "{classData.name}"?
+              <br />
+              <span className="text-muted-foreground mt-2 block">
+                assignments, exams, and notes linked to this class will be unlinked but not deleted.
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteClassDialogOpen(false)}
+              className="lowercase"
+            >
+              cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteClass}
+              disabled={deleteClass.isPending}
+              className="lowercase"
+            >
+              {deleteClass.isPending ? 'deleting...' : 'delete class'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit class dialog */}
+      <EditClassDialog
+        open={editClassDialogOpen}
+        onOpenChange={setEditClassDialogOpen}
+        classData={classData}
+      />
     </div>
   )
 }

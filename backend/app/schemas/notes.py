@@ -36,6 +36,8 @@ class NoteRead(NoteBase):
     user_id: UUID
     class_id: UUID | None
     assignment_id: UUID | None
+    class_name: str | None = None
+    assignment_title: str | None = None
     created_at: datetime
     updated_at: datetime
 

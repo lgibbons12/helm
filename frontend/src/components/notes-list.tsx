@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Plus, Search, FileText, Clock } from 'lucide-react'
+import { Plus, Search, FileText, Clock, BookOpen, ClipboardList, StickyNote } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 
 import { notesApi, type Note } from '../lib/api'
@@ -21,6 +21,12 @@ interface NotesListProps {
   onNewNote: () => void
 }
 
+interface GroupedNotes {
+  classNotes: Map<string, { className: string; notes: Note[] }>
+  assignmentNotes: Map<string, { assignmentTitle: string; className: string | null; notes: Note[] }>
+  standaloneNotes: Note[]
+}
+
 // =============================================================================
 // Component
 // =============================================================================
@@ -34,6 +40,10 @@ export function NotesList({
   onNewNote,
 }: NotesListProps) {
   const [searchQuery, setSearchQuery] = useState('')
+
+  // Determine if we should show grouped view
+  // Only show grouped view when listing ALL notes (no filters)
+  const showGrouped = !classId && !assignmentId && !standalone
 
   // Fetch notes
   const {
@@ -51,14 +61,59 @@ export function NotesList({
   })
 
   // Filter notes by search query (local filter)
-  const filteredNotes = notes?.filter((note) => {
-    if (!searchQuery) return true
+  const filteredNotes = useMemo(() => {
+    if (!notes) return []
+    if (!searchQuery) return notes
+    
     const query = searchQuery.toLowerCase()
-    return (
+    return notes.filter((note) =>
       note.title.toLowerCase().includes(query) ||
       (note.content_text?.toLowerCase().includes(query) ?? false)
     )
-  })
+  }, [notes, searchQuery])
+
+  // Group notes by class, assignment, and standalone
+  const groupedNotes = useMemo((): GroupedNotes => {
+    const classNotes = new Map<string, { className: string; notes: Note[] }>()
+    const assignmentNotes = new Map<string, { assignmentTitle: string; className: string | null; notes: Note[] }>()
+    const standaloneNotes: Note[] = []
+
+    for (const note of filteredNotes) {
+      if (note.assignment_id) {
+        // Assignment note
+        const key = note.assignment_id
+        const existing = assignmentNotes.get(key)
+        if (existing) {
+          existing.notes.push(note)
+        } else {
+          assignmentNotes.set(key, {
+            assignmentTitle: note.assignment_title || 'Unknown Assignment',
+            className: note.class_name,
+            notes: [note],
+          })
+        }
+      } else if (note.class_id) {
+        // Class note (no assignment)
+        const key = note.class_id
+        const existing = classNotes.get(key)
+        if (existing) {
+          existing.notes.push(note)
+        } else {
+          classNotes.set(key, {
+            className: note.class_name || 'Unknown Class',
+            notes: [note],
+          })
+        }
+      } else {
+        // Standalone note
+        standaloneNotes.push(note)
+      }
+    }
+
+    return { classNotes, assignmentNotes, standaloneNotes }
+  }, [filteredNotes])
+
+  const hasAnyNotes = filteredNotes.length > 0
 
   return (
     <div className="h-full flex flex-col">
@@ -95,9 +150,109 @@ export function NotesList({
           <NotesListLoading />
         ) : error ? (
           <NotesListError />
-        ) : filteredNotes && filteredNotes.length > 0 ? (
+        ) : hasAnyNotes ? (
+          showGrouped ? (
+            <GroupedNotesList
+              groupedNotes={groupedNotes}
+              selectedNoteId={selectedNoteId}
+              onSelectNote={onSelectNote}
+            />
+          ) : (
+            <div className="divide-y divide-border/30">
+              {filteredNotes.map((note) => (
+                <NoteListItem
+                  key={note.id}
+                  note={note}
+                  isSelected={note.id === selectedNoteId}
+                  onClick={() => onSelectNote(note)}
+                />
+              ))}
+            </div>
+          )
+        ) : (
+          <NotesListEmpty
+            hasSearch={!!searchQuery}
+            onNewNote={onNewNote}
+          />
+        )}
+      </div>
+    </div>
+  )
+}
+
+// =============================================================================
+// GroupedNotesList
+// =============================================================================
+
+interface GroupedNotesListProps {
+  groupedNotes: GroupedNotes
+  selectedNoteId?: string
+  onSelectNote: (note: Note) => void
+}
+
+function GroupedNotesList({ groupedNotes, selectedNoteId, onSelectNote }: GroupedNotesListProps) {
+  const { classNotes, assignmentNotes, standaloneNotes } = groupedNotes
+
+  return (
+    <div className="pb-4">
+      {/* Class notes */}
+      {classNotes.size > 0 && (
+        <div>
+          {Array.from(classNotes.entries()).map(([classId, { className, notes }]) => (
+            <div key={classId}>
+              <SectionHeader
+                icon={<BookOpen className="w-3 h-3" />}
+                label={className}
+              />
+              <div className="divide-y divide-border/30">
+                {notes.map((note) => (
+                  <NoteListItem
+                    key={note.id}
+                    note={note}
+                    isSelected={note.id === selectedNoteId}
+                    onClick={() => onSelectNote(note)}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Assignment notes */}
+      {assignmentNotes.size > 0 && (
+        <div>
+          {Array.from(assignmentNotes.entries()).map(([assignmentId, { assignmentTitle, className, notes }]) => (
+            <div key={assignmentId}>
+              <SectionHeader
+                icon={<ClipboardList className="w-3 h-3" />}
+                label={assignmentTitle}
+                sublabel={className || undefined}
+              />
+              <div className="divide-y divide-border/30">
+                {notes.map((note) => (
+                  <NoteListItem
+                    key={note.id}
+                    note={note}
+                    isSelected={note.id === selectedNoteId}
+                    onClick={() => onSelectNote(note)}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Standalone notes */}
+      {standaloneNotes.length > 0 && (
+        <div>
+          <SectionHeader
+            icon={<StickyNote className="w-3 h-3" />}
+            label="standalone"
+          />
           <div className="divide-y divide-border/30">
-            {filteredNotes.map((note) => (
+            {standaloneNotes.map((note) => (
               <NoteListItem
                 key={note.id}
                 note={note}
@@ -106,11 +261,33 @@ export function NotesList({
               />
             ))}
           </div>
-        ) : (
-          <NotesListEmpty
-            hasSearch={!!searchQuery}
-            onNewNote={onNewNote}
-          />
+        </div>
+      )}
+    </div>
+  )
+}
+
+// =============================================================================
+// SectionHeader
+// =============================================================================
+
+interface SectionHeaderProps {
+  icon: React.ReactNode
+  label: string
+  sublabel?: string
+}
+
+function SectionHeader({ icon, label, sublabel }: SectionHeaderProps) {
+  return (
+    <div className="px-3 py-2 bg-muted/30 border-y border-border/30 sticky top-0">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        {icon}
+        <span className="font-medium lowercase truncate">{label}</span>
+        {sublabel && (
+          <>
+            <span className="text-muted-foreground/50">·</span>
+            <span className="text-muted-foreground/70 lowercase truncate">{sublabel}</span>
+          </>
         )}
       </div>
     </div>

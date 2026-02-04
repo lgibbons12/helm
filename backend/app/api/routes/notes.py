@@ -4,12 +4,30 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import or_, select
+from sqlalchemy.orm import selectinload
 
 from app.api.deps import CurrentUser, DbSession, get_user_resource_or_404
 from app.db.models import Assignment, Class, Note
 from app.schemas.notes import NoteCreate, NoteRead, NoteUpdate
 
 router = APIRouter(prefix="/notes", tags=["notes"])
+
+
+def note_to_read(note: Note) -> NoteRead:
+    """Convert a Note model to NoteRead schema with class/assignment names."""
+    return NoteRead(
+        id=note.id,
+        user_id=note.user_id,
+        title=note.title,
+        content_text=note.content_text,
+        tags=note.tags or [],
+        class_id=note.class_id,
+        assignment_id=note.assignment_id,
+        class_name=note.class_.name if note.class_ else None,
+        assignment_title=note.assignment.title if note.assignment else None,
+        created_at=note.created_at,
+        updated_at=note.updated_at,
+    )
 
 
 @router.get("/", response_model=list[NoteRead])
@@ -32,7 +50,11 @@ async def list_notes(
     - q: Search in title and content_text
     - standalone: If true, only return notes not attached to class/assignment
     """
-    query = select(Note).where(Note.user_id == current_user.id)
+    query = (
+        select(Note)
+        .where(Note.user_id == current_user.id)
+        .options(selectinload(Note.class_), selectinload(Note.assignment))
+    )
     
     if class_id:
         query = query.where(Note.class_id == class_id)
@@ -56,7 +78,7 @@ async def list_notes(
     query = query.order_by(Note.updated_at.desc())
     
     result = await db.execute(query)
-    return [NoteRead.model_validate(n) for n in result.scalars()]
+    return [note_to_read(n) for n in result.scalars()]
 
 
 @router.post("/", response_model=NoteRead, status_code=status.HTTP_201_CREATED)
@@ -104,8 +126,15 @@ async def create_note(
     )
     db.add(new_note)
     await db.commit()
-    await db.refresh(new_note)
-    return NoteRead.model_validate(new_note)
+    
+    # Reload with relationships
+    result = await db.execute(
+        select(Note)
+        .where(Note.id == new_note.id)
+        .options(selectinload(Note.class_), selectinload(Note.assignment))
+    )
+    new_note = result.scalar_one()
+    return note_to_read(new_note)
 
 
 @router.get("/{note_id}", response_model=NoteRead)
@@ -115,8 +144,18 @@ async def get_note(
     db: DbSession,
 ) -> NoteRead:
     """Get a specific note by ID."""
-    note = await get_user_resource_or_404(db, Note, note_id, current_user.id)
-    return NoteRead.model_validate(note)
+    result = await db.execute(
+        select(Note)
+        .where(Note.id == note_id, Note.user_id == current_user.id)
+        .options(selectinload(Note.class_), selectinload(Note.assignment))
+    )
+    note = result.scalar_one_or_none()
+    if not note:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Note not found",
+        )
+    return note_to_read(note)
 
 
 @router.patch("/{note_id}", response_model=NoteRead)
@@ -131,8 +170,15 @@ async def update_note(
     for key, value in data.model_dump(exclude_unset=True).items():
         setattr(note, key, value)
     await db.commit()
-    await db.refresh(note)
-    return NoteRead.model_validate(note)
+    
+    # Reload with relationships
+    result = await db.execute(
+        select(Note)
+        .where(Note.id == note_id)
+        .options(selectinload(Note.class_), selectinload(Note.assignment))
+    )
+    note = result.scalar_one()
+    return note_to_read(note)
 
 
 @router.delete("/{note_id}", status_code=status.HTTP_204_NO_CONTENT)
