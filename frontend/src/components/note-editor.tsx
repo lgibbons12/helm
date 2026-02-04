@@ -463,7 +463,7 @@ export function NoteEditor({
 
         {/* Slash command menu */}
         {showSlashMenu && (
-          <div className="absolute left-4 mt-2 w-64 glass-strong rounded-lg shadow-lg border border-border/50 overflow-hidden z-50">
+          <div className="absolute left-2 lg:left-4 mt-2 w-[calc(100%-1rem)] lg:w-64 max-w-[calc(100vw-2rem)] lg:max-w-none glass-strong rounded-lg shadow-lg border border-border/50 overflow-hidden z-50">
             <div className="p-2 border-b border-border/50">
               <span className="text-xs text-muted-foreground">
                 {slashMenuFilter ? `/${slashMenuFilter}` : 'type to filter...'}

@@ -73,6 +73,15 @@ function BoardPage() {
   const navigate = useNavigate()
   const [activeId, setActiveId] = useState<string | null>(null)
   const [backlogOpen, setBacklogOpen] = useState(false)
+  
+  // Mobile day tab selection - default to current day or Monday
+  const today = new Date()
+  const dayOfWeek = today.getDay()
+  const currentDayIndex = (dayOfWeek + 6) % 7 // Convert Sunday=0 to Monday=0
+  const defaultDay: DayOfWeek | 'weekend' = currentDayIndex < 5 
+    ? WEEKDAYS[currentDayIndex] 
+    : 'weekend'
+  const [selectedDay, setSelectedDay] = useState<DayOfWeek | 'weekend'>(defaultDay)
 
   // Fetch all assignments
   const { data: assignments = [], isLoading: assignmentsLoading } = useQuery({
@@ -165,8 +174,9 @@ function BoardPage() {
     let newDay: DayOfWeek | null = null
     if (targetId === 'backlog') {
       newDay = null
-    } else if (targetId === 'weekend') {
-      newDay = 'saturday' // Weekend drops default to saturday
+    } else if (targetId === 'weekend' || targetId === 'saturday' || targetId === 'sunday') {
+      // Weekend drops: 'weekend' (desktop) defaults to saturday, or specific day (mobile)
+      newDay = (targetId === 'sunday' ? 'sunday' : 'saturday') as DayOfWeek
     } else {
       newDay = targetId as DayOfWeek
     }
@@ -199,8 +209,8 @@ function BoardPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="space-y-2 lg:space-y-4">
+      <div className="flex items-center justify-between px-2 lg:px-0">
         <div>
           <h1 className="text-xl font-semibold text-foreground lowercase">board</h1>
           <p className="text-xs text-muted-foreground lowercase">
@@ -215,8 +225,34 @@ function BoardPage() {
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        {/* Weekdays row */}
-        <div className="grid grid-cols-5 gap-3">
+        {/* Mobile: Day tabs */}
+        <div className="lg:hidden sticky top-0 z-10 glass-strong border-b border-border/50 mb-2">
+          <DayTabs selectedDay={selectedDay} onSelectDay={setSelectedDay} />
+        </div>
+
+        {/* Mobile: Single day view */}
+        <div className="lg:hidden">
+          {selectedDay === 'weekend' ? (
+            <WeekendColumnMobile
+              saturdayAssignments={assignmentsByDay.saturday}
+              sundayAssignments={assignmentsByDay.sunday}
+              classMap={classMap}
+              onCardClick={handleCardClick}
+              onStatusClick={handleStatusClick}
+            />
+          ) : (
+            <DayColumn
+              day={selectedDay}
+              assignments={assignmentsByDay[selectedDay]}
+              classMap={classMap}
+              onCardClick={handleCardClick}
+              onStatusClick={handleStatusClick}
+            />
+          )}
+        </div>
+
+        {/* Desktop: Weekdays row */}
+        <div className="hidden lg:grid lg:grid-cols-5 lg:gap-3">
           {WEEKDAYS.map((day) => (
             <DayColumn
               key={day}
@@ -229,17 +265,19 @@ function BoardPage() {
           ))}
         </div>
 
-        {/* Weekend - wide catchall */}
-        <WeekendColumn
-          assignments={[...assignmentsByDay.saturday, ...assignmentsByDay.sunday]}
-          classMap={classMap}
-          onCardClick={handleCardClick}
-          onStatusClick={handleStatusClick}
-        />
+        {/* Desktop: Weekend - wide catchall */}
+        <div className="hidden lg:block">
+          <WeekendColumn
+            assignments={[...assignmentsByDay.saturday, ...assignmentsByDay.sunday]}
+            classMap={classMap}
+            onCardClick={handleCardClick}
+            onStatusClick={handleStatusClick}
+          />
+        </div>
 
         {/* Backlog - subtle collapsible */}
         {backlogAssignments.length > 0 && (
-          <div className="border-t border-border/30 pt-3">
+          <div className="border-t border-border/30 pt-2 lg:pt-3">
             <button
               onClick={() => setBacklogOpen(!backlogOpen)}
               className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
@@ -282,6 +320,184 @@ function BoardPage() {
 }
 
 // =============================================================================
+// Day Tabs (Mobile)
+// =============================================================================
+
+interface DayTabsProps {
+  selectedDay: DayOfWeek | 'weekend'
+  onSelectDay: (day: DayOfWeek | 'weekend') => void
+}
+
+function DayTabs({ selectedDay, onSelectDay }: DayTabsProps) {
+  const today = new Date()
+  const dayOfWeek = today.getDay()
+  const currentDayIndex = (dayOfWeek + 6) % 7
+  
+  return (
+    <div className="flex overflow-x-auto gap-1 px-2 py-2 scrollbar-hide">
+      {WEEKDAYS.map((day, index) => {
+        const isCurrentDay = index === currentDayIndex
+        const isSelected = selectedDay === day
+        
+        return (
+          <button
+            key={day}
+            onClick={() => onSelectDay(day)}
+            className={`flex-shrink-0 px-4 py-2 text-sm font-medium rounded-lg transition-all lowercase min-h-[44px] ${
+              isSelected
+                ? 'bg-accent text-accent-foreground'
+                : isCurrentDay
+                  ? 'bg-muted/50 text-foreground'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/30'
+            }`}
+          >
+            {SHORT_DAYS[day]}
+          </button>
+        )
+      })}
+      <button
+        onClick={() => onSelectDay('weekend')}
+        className={`flex-shrink-0 px-4 py-2 text-sm font-medium rounded-lg transition-all lowercase min-h-[44px] ${
+          selectedDay === 'weekend'
+            ? 'bg-accent text-accent-foreground'
+            : (dayOfWeek === 0 || dayOfWeek === 6)
+              ? 'bg-muted/50 text-foreground'
+              : 'text-muted-foreground hover:text-foreground hover:bg-muted/30'
+        }`}
+      >
+        weekend
+      </button>
+    </div>
+  )
+}
+
+// =============================================================================
+// Weekend Column Mobile (Stacked)
+// =============================================================================
+
+function WeekendColumnMobile({
+  saturdayAssignments,
+  sundayAssignments,
+  classMap,
+  onCardClick,
+  onStatusClick,
+}: {
+  saturdayAssignments: Assignment[]
+  sundayAssignments: Assignment[]
+  classMap: Record<string, Class>
+  onCardClick: (id: string) => void
+  onStatusClick: (e: React.MouseEvent, id: string, status: AssignmentStatus) => void
+}) {
+  const { setNodeRef: setSaturdayRef, isOver: isSaturdayOver } = useDroppable({
+    id: 'saturday',
+  })
+  
+  const { setNodeRef: setSundayRef, isOver: isSundayOver } = useDroppable({
+    id: 'sunday',
+  })
+
+  const today = new Date()
+  const dayOfWeek = today.getDay()
+  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6
+  const isSaturday = dayOfWeek === 6
+  const isSunday = dayOfWeek === 0
+
+  return (
+    <div className="space-y-3">
+      {/* Saturday */}
+      <div
+        ref={setSaturdayRef}
+        className={`glass rounded-lg p-3 min-h-[180px] flex flex-col transition-all ${
+          isSaturdayOver
+            ? 'bg-accent/10 ring-2 ring-accent/50'
+            : ''
+        } ${isSaturday ? 'ring-2 ring-accent/50' : ''}`}
+      >
+        <div className="flex items-center justify-between mb-3 pb-2 border-b border-border/30">
+          <span
+            className={`text-sm font-medium lowercase ${
+              isSaturday ? 'text-accent' : 'text-foreground'
+            }`}
+          >
+            saturday
+          </span>
+          {saturdayAssignments.length > 0 && (
+            <span className="text-xs text-muted-foreground">
+              {saturdayAssignments.length}
+            </span>
+          )}
+        </div>
+
+        <div className="flex-1 space-y-2 overflow-y-auto">
+          {saturdayAssignments.map((assignment) => (
+            <DraggableCard
+              key={assignment.id}
+              assignment={assignment}
+              classMap={classMap}
+              onCardClick={onCardClick}
+              onStatusClick={onStatusClick}
+            />
+          ))}
+
+          {saturdayAssignments.length === 0 && (
+            <div className="h-full flex items-center justify-center">
+              <span className="text-xs text-muted-foreground/40 lowercase">
+                drop here
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Sunday */}
+      <div
+        ref={setSundayRef}
+        className={`glass rounded-lg p-3 min-h-[180px] flex flex-col transition-all ${
+          isSundayOver
+            ? 'bg-accent/10 ring-2 ring-accent/50'
+            : ''
+        } ${isSunday ? 'ring-2 ring-accent/50' : ''}`}
+      >
+        <div className="flex items-center justify-between mb-3 pb-2 border-b border-border/30">
+          <span
+            className={`text-sm font-medium lowercase ${
+              isSunday ? 'text-accent' : 'text-foreground'
+            }`}
+          >
+            sunday
+          </span>
+          {sundayAssignments.length > 0 && (
+            <span className="text-xs text-muted-foreground">
+              {sundayAssignments.length}
+            </span>
+          )}
+        </div>
+
+        <div className="flex-1 space-y-2 overflow-y-auto">
+          {sundayAssignments.map((assignment) => (
+            <DraggableCard
+              key={assignment.id}
+              assignment={assignment}
+              classMap={classMap}
+              onCardClick={onCardClick}
+              onStatusClick={onStatusClick}
+            />
+          ))}
+
+          {sundayAssignments.length === 0 && (
+            <div className="h-full flex items-center justify-center">
+              <span className="text-xs text-muted-foreground/40 lowercase">
+                drop here
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// =============================================================================
 // Backlog Drop Zone
 // =============================================================================
 
@@ -303,7 +519,7 @@ function BacklogDropZone({
   return (
     <div
       ref={setNodeRef}
-      className={`mt-2 min-h-[60px] flex gap-2 overflow-x-auto py-2 rounded transition-colors ${
+      className={`mt-2 min-h-[60px] flex flex-col lg:flex-row gap-2 lg:overflow-x-auto overflow-y-auto lg:overflow-y-visible py-2 rounded transition-colors ${
         isOver ? 'bg-accent/5 ring-1 ring-accent/30' : ''
       }`}
     >
@@ -356,7 +572,7 @@ function DayColumn({
   return (
     <div
       ref={setNodeRef}
-      className={`glass rounded-lg p-3 min-h-[220px] flex flex-col transition-all ${
+      className={`glass rounded-lg p-2 lg:p-3 min-h-[180px] lg:min-h-[220px] w-full lg:w-auto flex flex-col transition-all ${
         isOver
           ? 'bg-accent/10 ring-2 ring-accent/50'
           : ''
@@ -427,7 +643,7 @@ function WeekendColumn({
   return (
     <div
       ref={setNodeRef}
-      className={`glass rounded-lg p-3 min-h-[120px] transition-all ${
+      className={`glass rounded-lg p-2 lg:p-3 min-h-[120px] transition-all ${
         isOver
           ? 'bg-accent/10 ring-2 ring-accent/50'
           : ''
@@ -450,7 +666,7 @@ function WeekendColumn({
 
       <div className="flex gap-2 overflow-x-auto pb-1">
         {assignments.map((assignment) => (
-          <div key={assignment.id} className="flex-shrink-0 w-48">
+          <div key={assignment.id} className="flex-shrink-0 w-full lg:w-48">
             <DraggableCard
               assignment={assignment}
               classMap={classMap}
