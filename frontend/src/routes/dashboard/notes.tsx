@@ -1,7 +1,7 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Trash2, ArrowLeft, FileText } from 'lucide-react'
+import { Trash2, ArrowLeft, FileText, Menu } from 'lucide-react'
 
 import { notesApi, type Note, type NoteCreate } from '../../lib/api'
 import { NotesList } from '@/components/notes-list'
@@ -23,6 +23,14 @@ function NotesPage() {
   const queryClient = useQueryClient()
   const [selectedNote, setSelectedNote] = useState<Note | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+
+  // Auto-close sidebar when note is selected on mobile
+  useEffect(() => {
+    if (selectedNote && window.innerWidth < 1024) {
+      setSidebarOpen(false)
+    }
+  }, [selectedNote])
 
   // Create new note mutation
   const createNote = useMutation({
@@ -80,18 +88,58 @@ function NotesPage() {
   }, [selectedNote, deleteNote])
 
   return (
-    <div className="h-[calc(100vh-8rem)] flex gap-6">
-      {/* Sidebar with notes list */}
-      <div className="w-72 flex-shrink-0 glass rounded-lg overflow-hidden">
-        <NotesList
-          selectedNoteId={selectedNote?.id}
-          onSelectNote={setSelectedNote}
-          onNewNote={handleNewNote}
+    <div className="h-[calc(100vh-8rem)] flex flex-col lg:flex-row gap-0 lg:gap-6 relative">
+      {/* Mobile sidebar backdrop */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
         />
+      )}
+
+      {/* Mobile header */}
+      <div className="lg:hidden sticky top-0 z-30 glass-strong border-b border-border/50 px-4 py-3 flex items-center justify-between">
+        <button
+          onClick={() => setSidebarOpen(true)}
+          className="p-2 hover:bg-muted rounded-lg"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+        <h2 className="text-sm font-semibold text-foreground lowercase">
+          {selectedNote ? selectedNote.title : 'notes'}
+        </h2>
+        <div className="w-9" /> {/* Spacer for centering */}
+      </div>
+
+      {/* Sidebar with notes list */}
+      <div
+        className={`fixed top-0 left-0 h-full w-[85vw] max-w-sm glass-strong z-50 transform transition-transform duration-300 lg:translate-x-0 lg:relative lg:w-72 lg:flex-shrink-0 rounded-lg overflow-hidden ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        <div className="h-full flex flex-col">
+          {/* Mobile close button */}
+          <div className="lg:hidden flex items-center justify-between p-4 border-b border-border/50">
+            <h2 className="text-sm font-semibold text-foreground lowercase">notes</h2>
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="p-2 hover:bg-muted rounded-lg"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <NotesList
+              selectedNoteId={selectedNote?.id}
+              onSelectNote={setSelectedNote}
+              onNewNote={handleNewNote}
+            />
+          </div>
+        </div>
       </div>
 
       {/* Main editor area */}
-      <div className="flex-1 glass rounded-lg overflow-hidden">
+      <div className="flex-1 glass rounded-lg overflow-hidden w-full lg:w-auto">
         {selectedNote ? (
           <div className="h-full flex flex-col">
             {/* Editor header */}
@@ -99,7 +147,13 @@ function NotesPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setSelectedNote(null)}
+                onClick={() => {
+                  setSelectedNote(null)
+                  // On mobile, also open sidebar when going back
+                  if (window.innerWidth < 1024) {
+                    setSidebarOpen(true)
+                  }
+                }}
                 className="gap-1 text-xs lowercase"
               >
                 <ArrowLeft className="w-3 h-3" />
