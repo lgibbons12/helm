@@ -20,6 +20,7 @@ from app.api.routes import (
     notes,
     time_blocks,
     transactions,
+    weekly_plans,
 )
 
 settings = get_settings()
@@ -58,6 +59,7 @@ app.include_router(notes.router)
 app.include_router(time_blocks.router)
 app.include_router(transactions.router)
 app.include_router(budget.router)
+app.include_router(weekly_plans.router)
 
 
 @app.get("/health")

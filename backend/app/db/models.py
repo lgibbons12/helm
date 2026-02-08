@@ -130,6 +130,9 @@ class User(Base):
     budget_settings: Mapped[Optional["BudgetSettings"]] = relationship(
         "BudgetSettings", back_populates="user", uselist=False, cascade="all, delete-orphan"
     )
+    weekly_plans: Mapped[list["WeeklyPlan"]] = relationship(
+        "WeeklyPlan", back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class AuthIdentity(Base):
@@ -480,3 +483,36 @@ class BudgetSettings(Base):
 
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="budget_settings")
+
+
+class WeeklyPlan(Base):
+    """
+    Weekly plan document (one per user per week).
+
+    Keyed by week_start (the Monday of each week).
+    Content is stored as markdown for the TipTap editor.
+    """
+
+    __tablename__ = "weekly_plans"
+    __table_args__ = (
+        UniqueConstraint("user_id", "week_start", name="unique_user_week_plan"),
+        Index("idx_weekly_plans_user_week", "user_id", "week_start"),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    week_start: Mapped[date] = mapped_column(nullable=False)  # Monday of the week
+    content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Markdown
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=text("NOW()"), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=text("NOW()"), nullable=False
+    )
+
+    # Relationships
+    user: Mapped["User"] = relationship("User", back_populates="weekly_plans")

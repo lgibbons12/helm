@@ -95,6 +95,16 @@ export const api = {
     return handleResponse<T>(response)
   },
 
+  async put<T>(path: string, data?: unknown): Promise<T> {
+    const response = await fetch(`${API_BASE}${path}`, {
+      method: 'PUT',
+      credentials: 'include',
+      headers: getHeaders(),
+      body: data ? JSON.stringify(data) : undefined,
+    })
+    return handleResponse<T>(response)
+  },
+
   async patch<T>(path: string, data: unknown): Promise<T> {
     const response = await fetch(`${API_BASE}${path}`, {
       method: 'PATCH',
@@ -202,6 +212,24 @@ export interface NoteListParams {
   tag?: string
   q?: string
   standalone?: boolean
+}
+
+// =============================================================================
+// Weekly Plan Types
+// =============================================================================
+
+export interface WeeklyPlan {
+  id: string
+  user_id: string
+  week_start: string  // YYYY-MM-DD (Monday of the week)
+  content: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface WeeklyPlanUpsert {
+  week_start: string
+  content: string | null
 }
 
 // =============================================================================
@@ -401,4 +429,14 @@ export const transactionsApi = {
 
   getWeeklyAverage: () =>
     api.get<WeeklyAverage>('/transactions/stats/weekly-average'),
+}
+
+export const weeklyPlanApi = {
+  get: (weekStart?: string) =>
+    api.get<WeeklyPlan | null>(
+      `/weekly-plan${weekStart ? `?week_start=${weekStart}` : ''}`
+    ),
+
+  upsert: (data: WeeklyPlanUpsert) =>
+    api.put<WeeklyPlan>('/weekly-plan', data),
 }
