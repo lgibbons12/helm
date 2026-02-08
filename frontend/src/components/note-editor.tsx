@@ -8,6 +8,8 @@ import TaskItem from '@tiptap/extension-task-item'
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight'
 import { Markdown } from 'tiptap-markdown'
 import { common, createLowlight } from 'lowlight'
+import { InlineMathWithMarkdown, MathExtension } from '@/extensions/math-with-markdown'
+import 'katex/dist/katex.min.css'
 import {
   Bold,
   Italic,
@@ -25,6 +27,8 @@ import {
   Check,
   AlertCircle,
   Save,
+  Sigma,
+  PlusSquare,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -106,6 +110,32 @@ const slashMenuItems: SlashMenuItem[] = [
     icon: <Quote className="w-4 h-4" />,
     command: (editor) => editor?.chain().focus().toggleBlockquote().run(),
   },
+  {
+    title: 'inline math',
+    description: 'insert inline latex formula',
+    icon: <Sigma className="w-4 h-4" />,
+    command: (editor) => {
+      editor?.chain().focus().insertContent('$x$').run()
+      // Move cursor back one position to be inside the dollar signs
+      const { $from } = editor?.state.selection || {}
+      if ($from) {
+        editor?.commands.setTextSelection($from.pos - 1)
+      }
+    },
+  },
+  {
+    title: 'block math',
+    description: 'insert block latex formula',
+    icon: <PlusSquare className="w-4 h-4" />,
+    command: (editor) => {
+      editor?.chain().focus().insertContent('\n$$\n\n$$\n').run()
+      // Move cursor back to middle line
+      const { $from } = editor?.state.selection || {}
+      if ($from) {
+        editor?.commands.setTextSelection($from.pos - 3)
+      }
+    },
+  },
 ]
 
 // =============================================================================
@@ -147,6 +177,12 @@ export function NoteEditor({
       }),
       CodeBlockLowlight.configure({
         lowlight,
+      }),
+      InlineMathWithMarkdown.configure({
+        delimiters: 'dollar', // Use $...$ for inline and $$...$$ for block math
+        katexOptions: {
+          throwOnError: false, // Don't throw errors on invalid LaTeX
+        },
       }),
       Markdown.configure({
         html: false,
@@ -301,13 +337,62 @@ export function NoteEditor({
     }
   }, [lastSavedTitle])
 
+  // Helper to convert $...$ patterns to math nodes after loading
+  const processLatexInContent = useCallback(() => {
+    if (!editor) return
+
+    const { state } = editor
+    const { tr } = state
+    let modified = false
+
+    // Find and replace all $...$ patterns with math nodes
+    state.doc.descendants((node, pos) => {
+      if (node.type.name === 'text' && node.text) {
+        const text = node.text
+        // Match $...$ patterns (non-greedy)
+        const regex = /\$([^$]+)\$/g
+        let match
+        let offset = 0
+
+        while ((match = regex.exec(text)) !== null) {
+          const start = pos + match.index - offset
+          const end = start + match[0].length
+          const latex = match[1]
+
+          // Replace with inlineMath node
+          tr.replaceWith(
+            start,
+            end,
+            editor.schema.nodes.inlineMath.create({
+              latex,
+              evaluate: 'no',
+              display: 'no',
+            })
+          )
+
+          offset += match[0].length - 1 // Adjust offset for replaced content
+          modified = true
+        }
+      }
+    })
+
+    if (modified) {
+      editor.view.dispatch(tr)
+    }
+  }, [editor])
+
   // Update content when initial values change (e.g., loading different note)
   useEffect(() => {
     if (editor && initialContent !== lastSavedContent) {
       editor.commands.setContent(initialContent)
       setLastSavedContent(initialContent)
+
+      // Process LaTeX after content is loaded
+      setTimeout(() => {
+        processLatexInContent()
+      }, 0)
     }
-  }, [initialContent, editor, lastSavedContent])
+  }, [initialContent, editor, lastSavedContent, processLatexInContent])
 
   useEffect(() => {
     if (initialTitle !== lastSavedTitle) {
