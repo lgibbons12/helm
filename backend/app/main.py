@@ -15,9 +15,11 @@ from app.api.routes import (
     auth,
     assignments,
     budget,
+    chat,
     classes,
     exams,
     notes,
+    pdfs,
     time_blocks,
     transactions,
     weekly_plans,
@@ -60,6 +62,8 @@ app.include_router(time_blocks.router)
 app.include_router(transactions.router)
 app.include_router(budget.router)
 app.include_router(weekly_plans.router)
+app.include_router(pdfs.router)
+app.include_router(chat.router)
 
 
 @app.get("/health")

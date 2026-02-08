@@ -9,14 +9,20 @@ import {
   Plus,
   Trash2,
   Pencil,
+  FileUp,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  Upload,
 } from 'lucide-react'
 
-import { classesApi, notesApi, type NoteCreate } from '../../../lib/api'
+import { classesApi, notesApi, pdfApi, type NoteCreate, type PDF } from '../../../lib/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { NoteEditor } from '@/components/note-editor'
 import { EditClassDialog } from '@/components/edit-class-dialog'
+import { PDFUpload } from '@/components/pdf-upload'
 import {
   Dialog,
   DialogContent,
@@ -333,6 +339,9 @@ function ClassDetailPage() {
         )}
       </div>
 
+      {/* PDFs section */}
+      <ClassPdfsSection classId={classId} />
+
       {/* Delete note confirmation dialog */}
       <Dialog open={deleteNoteDialogOpen} onOpenChange={setDeleteNoteDialogOpen}>
         <DialogContent className="glass-strong border-0">
@@ -412,6 +421,89 @@ function formatLinkLabel(key: string): string {
     .replace(/_/g, ' ')
     .trim()
     .toLowerCase()
+}
+
+function ClassPdfsSection({ classId }: { classId: string }) {
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const [showUpload, setShowUpload] = useState(false)
+
+  const { data: pdfsData, isLoading } = useQuery({
+    queryKey: ['pdfs', { classId }],
+    queryFn: () => pdfApi.list({ class_id: classId }),
+  })
+  const pdfs = pdfsData?.pdfs || []
+
+  return (
+    <div className="glass-card p-6">
+      <div className="flex items-center justify-between mb-4 pb-4 border-b border-border/50">
+        <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+          <FileUp className="w-4 h-4" />
+          pdfs ({pdfs.length})
+        </h2>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setShowUpload(!showUpload)}
+          className="gap-1 lowercase text-xs"
+        >
+          <Upload className="w-3.5 h-3.5" />
+          {showUpload ? 'hide' : 'upload'}
+        </Button>
+      </div>
+
+      {showUpload && (
+        <div className="mb-4 pb-4 border-b border-border/30">
+          <PDFUpload
+            classId={classId}
+            onUploadComplete={() => {
+              setShowUpload(false)
+              queryClient.invalidateQueries({ queryKey: ['pdfs'] })
+            }}
+          />
+        </div>
+      )}
+
+      {isLoading ? (
+        <div className="space-y-2">
+          <Skeleton className="h-10 w-full rounded-lg" />
+          <Skeleton className="h-10 w-full rounded-lg" />
+        </div>
+      ) : pdfs.length === 0 ? (
+        <div className="py-6 text-center">
+          <FileUp className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
+          <p className="text-sm text-muted-foreground lowercase">no pdfs attached to this class</p>
+        </div>
+      ) : (
+        <div className="space-y-1">
+          {pdfs.map((pdf) => (
+            <div
+              key={pdf.id}
+              className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted/20 cursor-pointer transition-colors"
+              onClick={() => navigate({ to: '/dashboard/pdfs/$pdfId', params: { pdfId: pdf.id } })}
+            >
+              <FileUp className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+              <span className="text-sm text-foreground truncate lowercase flex-1">
+                {pdf.filename}
+              </span>
+              {pdf.page_count && (
+                <span className="text-[10px] text-muted-foreground">{pdf.page_count}p</span>
+              )}
+              {pdf.extraction_status === 'success' && (
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+              )}
+              {pdf.extraction_status === 'failed' && (
+                <XCircle className="w-3.5 h-3.5 text-destructive flex-shrink-0" />
+              )}
+              {pdf.extraction_status === 'pending' && (
+                <Clock className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 function ClassDetailLoading() {

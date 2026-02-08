@@ -86,6 +86,16 @@ class Settings(BaseSettings):
     # This uses samesite="none" + secure=True instead of samesite="lax"
     cookie_cross_domain: bool = False
 
+    # AWS S3 (for PDF storage)
+    aws_access_key_id: str
+    aws_secret_access_key: str
+    aws_s3_bucket: str
+    aws_s3_region: str = "us-east-2"
+    aws_s3_endpoint_url: str | None = None  # Set for MinIO/LocalStack (e.g. http://localhost:9000)
+
+    # Anthropic API
+    anthropic_api_key: str
+
 
 @lru_cache
 def get_settings() -> Settings:

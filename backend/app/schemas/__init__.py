@@ -13,6 +13,24 @@ from app.schemas.notes import NoteCreate, NoteRead, NoteUpdate
 from app.schemas.time_blocks import TimeBlockCreate, TimeBlockRead, TimeBlockUpdate
 from app.schemas.transactions import TransactionCreate, TransactionRead
 from app.schemas.budget import BudgetSettingsRead, BudgetSettingsUpdate
+from app.schemas.pdfs import (
+    PDFUploadURLRequest,
+    PDFUploadURLResponse,
+    PDFResponse,
+    PDFWithText,
+    PDFProcessResponse,
+    PDFListResponse,
+)
+from app.schemas.chat import (
+    ConversationCreateRequest,
+    ConversationResponse,
+    ConversationWithMessages,
+    ConversationListResponse,
+    ChatMessageRequest,
+    ChatMessageResponse,
+    BrainResponse,
+    ConversationUpdateContextRequest,
+)
 
 __all__ = [
     # User
@@ -49,4 +67,20 @@ __all__ = [
     # Budget
     "BudgetSettingsRead",
     "BudgetSettingsUpdate",
+    # PDFs
+    "PDFUploadURLRequest",
+    "PDFUploadURLResponse",
+    "PDFResponse",
+    "PDFWithText",
+    "PDFProcessResponse",
+    "PDFListResponse",
+    # Chat
+    "ConversationCreateRequest",
+    "ConversationResponse",
+    "ConversationWithMessages",
+    "ConversationListResponse",
+    "ChatMessageRequest",
+    "ChatMessageResponse",
+    "BrainResponse",
+    "ConversationUpdateContextRequest",
 ]

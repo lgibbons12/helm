@@ -3,6 +3,7 @@ import {
   Compass,
   BookOpen,
   FileText,
+  FileUp,
   Wallet,
   Settings,
   LogOut,
@@ -11,8 +12,9 @@ import {
   GraduationCap,
   LayoutGrid,
   ClipboardList,
+  MessageSquare,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 import { useAuth } from '../lib/auth'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -27,6 +29,8 @@ const navItems = [
   { to: '/dashboard/board', icon: LayoutGrid, label: 'board' },
   { to: '/dashboard/plan', icon: ClipboardList, label: 'plan' },
   { to: '/dashboard/notes', icon: FileText, label: 'notes' },
+  { to: '/dashboard/pdfs', icon: FileUp, label: 'pdfs' },
+  { to: '/dashboard/chat', icon: MessageSquare, label: 'chat' },
   { to: '/dashboard/budget', icon: Wallet, label: 'budget' },
 ]
 
@@ -36,8 +40,13 @@ function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   // Redirect to home if not authenticated
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      navigate({ to: '/' })
+    }
+  }, [isLoading, isAuthenticated, navigate])
+
   if (!isLoading && !isAuthenticated) {
-    navigate({ to: '/' })
     return null
   }
 

@@ -13,14 +13,18 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DashboardIndexRouteImport } from './routes/dashboard/index'
 import { Route as DashboardPlanRouteImport } from './routes/dashboard/plan'
+import { Route as DashboardPdfsRouteImport } from './routes/dashboard/pdfs'
 import { Route as DashboardNotesRouteImport } from './routes/dashboard/notes'
 import { Route as DashboardClassesRouteImport } from './routes/dashboard/classes'
+import { Route as DashboardChatRouteImport } from './routes/dashboard/chat'
 import { Route as DashboardBudgetRouteImport } from './routes/dashboard/budget'
 import { Route as DashboardBoardRouteImport } from './routes/dashboard/board'
 import { Route as DashboardAssignmentsRouteImport } from './routes/dashboard/assignments'
+import { Route as DashboardPdfsIndexRouteImport } from './routes/dashboard/pdfs/index'
 import { Route as DashboardNotesIndexRouteImport } from './routes/dashboard/notes/index'
 import { Route as DashboardClassesIndexRouteImport } from './routes/dashboard/classes/index'
 import { Route as DashboardAssignmentsIndexRouteImport } from './routes/dashboard/assignments/index'
+import { Route as DashboardPdfsPdfIdRouteImport } from './routes/dashboard/pdfs/$pdfId'
 import { Route as DashboardNotesNoteIdRouteImport } from './routes/dashboard/notes/$noteId'
 import { Route as DashboardClassesClassIdRouteImport } from './routes/dashboard/classes/$classId'
 import { Route as DashboardAssignmentsAssignmentIdRouteImport } from './routes/dashboard/assignments/$assignmentId'
@@ -45,6 +49,11 @@ const DashboardPlanRoute = DashboardPlanRouteImport.update({
   path: '/plan',
   getParentRoute: () => DashboardRoute,
 } as any)
+const DashboardPdfsRoute = DashboardPdfsRouteImport.update({
+  id: '/pdfs',
+  path: '/pdfs',
+  getParentRoute: () => DashboardRoute,
+} as any)
 const DashboardNotesRoute = DashboardNotesRouteImport.update({
   id: '/notes',
   path: '/notes',
@@ -53,6 +62,11 @@ const DashboardNotesRoute = DashboardNotesRouteImport.update({
 const DashboardClassesRoute = DashboardClassesRouteImport.update({
   id: '/classes',
   path: '/classes',
+  getParentRoute: () => DashboardRoute,
+} as any)
+const DashboardChatRoute = DashboardChatRouteImport.update({
+  id: '/chat',
+  path: '/chat',
   getParentRoute: () => DashboardRoute,
 } as any)
 const DashboardBudgetRoute = DashboardBudgetRouteImport.update({
@@ -70,6 +84,11 @@ const DashboardAssignmentsRoute = DashboardAssignmentsRouteImport.update({
   path: '/assignments',
   getParentRoute: () => DashboardRoute,
 } as any)
+const DashboardPdfsIndexRoute = DashboardPdfsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => DashboardPdfsRoute,
+} as any)
 const DashboardNotesIndexRoute = DashboardNotesIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -86,6 +105,11 @@ const DashboardAssignmentsIndexRoute =
     path: '/',
     getParentRoute: () => DashboardAssignmentsRoute,
   } as any)
+const DashboardPdfsPdfIdRoute = DashboardPdfsPdfIdRouteImport.update({
+  id: '/$pdfId',
+  path: '/$pdfId',
+  getParentRoute: () => DashboardPdfsRoute,
+} as any)
 const DashboardNotesNoteIdRoute = DashboardNotesNoteIdRouteImport.update({
   id: '/$noteId',
   path: '/$noteId',
@@ -109,29 +133,36 @@ export interface FileRoutesByFullPath {
   '/dashboard/assignments': typeof DashboardAssignmentsRouteWithChildren
   '/dashboard/board': typeof DashboardBoardRoute
   '/dashboard/budget': typeof DashboardBudgetRoute
+  '/dashboard/chat': typeof DashboardChatRoute
   '/dashboard/classes': typeof DashboardClassesRouteWithChildren
   '/dashboard/notes': typeof DashboardNotesRouteWithChildren
+  '/dashboard/pdfs': typeof DashboardPdfsRouteWithChildren
   '/dashboard/plan': typeof DashboardPlanRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/dashboard/assignments/$assignmentId': typeof DashboardAssignmentsAssignmentIdRoute
   '/dashboard/classes/$classId': typeof DashboardClassesClassIdRoute
   '/dashboard/notes/$noteId': typeof DashboardNotesNoteIdRoute
+  '/dashboard/pdfs/$pdfId': typeof DashboardPdfsPdfIdRoute
   '/dashboard/assignments/': typeof DashboardAssignmentsIndexRoute
   '/dashboard/classes/': typeof DashboardClassesIndexRoute
   '/dashboard/notes/': typeof DashboardNotesIndexRoute
+  '/dashboard/pdfs/': typeof DashboardPdfsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/dashboard/board': typeof DashboardBoardRoute
   '/dashboard/budget': typeof DashboardBudgetRoute
+  '/dashboard/chat': typeof DashboardChatRoute
   '/dashboard/plan': typeof DashboardPlanRoute
   '/dashboard': typeof DashboardIndexRoute
   '/dashboard/assignments/$assignmentId': typeof DashboardAssignmentsAssignmentIdRoute
   '/dashboard/classes/$classId': typeof DashboardClassesClassIdRoute
   '/dashboard/notes/$noteId': typeof DashboardNotesNoteIdRoute
+  '/dashboard/pdfs/$pdfId': typeof DashboardPdfsPdfIdRoute
   '/dashboard/assignments': typeof DashboardAssignmentsIndexRoute
   '/dashboard/classes': typeof DashboardClassesIndexRoute
   '/dashboard/notes': typeof DashboardNotesIndexRoute
+  '/dashboard/pdfs': typeof DashboardPdfsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -140,16 +171,20 @@ export interface FileRoutesById {
   '/dashboard/assignments': typeof DashboardAssignmentsRouteWithChildren
   '/dashboard/board': typeof DashboardBoardRoute
   '/dashboard/budget': typeof DashboardBudgetRoute
+  '/dashboard/chat': typeof DashboardChatRoute
   '/dashboard/classes': typeof DashboardClassesRouteWithChildren
   '/dashboard/notes': typeof DashboardNotesRouteWithChildren
+  '/dashboard/pdfs': typeof DashboardPdfsRouteWithChildren
   '/dashboard/plan': typeof DashboardPlanRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/dashboard/assignments/$assignmentId': typeof DashboardAssignmentsAssignmentIdRoute
   '/dashboard/classes/$classId': typeof DashboardClassesClassIdRoute
   '/dashboard/notes/$noteId': typeof DashboardNotesNoteIdRoute
+  '/dashboard/pdfs/$pdfId': typeof DashboardPdfsPdfIdRoute
   '/dashboard/assignments/': typeof DashboardAssignmentsIndexRoute
   '/dashboard/classes/': typeof DashboardClassesIndexRoute
   '/dashboard/notes/': typeof DashboardNotesIndexRoute
+  '/dashboard/pdfs/': typeof DashboardPdfsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -159,29 +194,36 @@ export interface FileRouteTypes {
     | '/dashboard/assignments'
     | '/dashboard/board'
     | '/dashboard/budget'
+    | '/dashboard/chat'
     | '/dashboard/classes'
     | '/dashboard/notes'
+    | '/dashboard/pdfs'
     | '/dashboard/plan'
     | '/dashboard/'
     | '/dashboard/assignments/$assignmentId'
     | '/dashboard/classes/$classId'
     | '/dashboard/notes/$noteId'
+    | '/dashboard/pdfs/$pdfId'
     | '/dashboard/assignments/'
     | '/dashboard/classes/'
     | '/dashboard/notes/'
+    | '/dashboard/pdfs/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/dashboard/board'
     | '/dashboard/budget'
+    | '/dashboard/chat'
     | '/dashboard/plan'
     | '/dashboard'
     | '/dashboard/assignments/$assignmentId'
     | '/dashboard/classes/$classId'
     | '/dashboard/notes/$noteId'
+    | '/dashboard/pdfs/$pdfId'
     | '/dashboard/assignments'
     | '/dashboard/classes'
     | '/dashboard/notes'
+    | '/dashboard/pdfs'
   id:
     | '__root__'
     | '/'
@@ -189,16 +231,20 @@ export interface FileRouteTypes {
     | '/dashboard/assignments'
     | '/dashboard/board'
     | '/dashboard/budget'
+    | '/dashboard/chat'
     | '/dashboard/classes'
     | '/dashboard/notes'
+    | '/dashboard/pdfs'
     | '/dashboard/plan'
     | '/dashboard/'
     | '/dashboard/assignments/$assignmentId'
     | '/dashboard/classes/$classId'
     | '/dashboard/notes/$noteId'
+    | '/dashboard/pdfs/$pdfId'
     | '/dashboard/assignments/'
     | '/dashboard/classes/'
     | '/dashboard/notes/'
+    | '/dashboard/pdfs/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -236,6 +282,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardPlanRouteImport
       parentRoute: typeof DashboardRoute
     }
+    '/dashboard/pdfs': {
+      id: '/dashboard/pdfs'
+      path: '/pdfs'
+      fullPath: '/dashboard/pdfs'
+      preLoaderRoute: typeof DashboardPdfsRouteImport
+      parentRoute: typeof DashboardRoute
+    }
     '/dashboard/notes': {
       id: '/dashboard/notes'
       path: '/notes'
@@ -248,6 +301,13 @@ declare module '@tanstack/react-router' {
       path: '/classes'
       fullPath: '/dashboard/classes'
       preLoaderRoute: typeof DashboardClassesRouteImport
+      parentRoute: typeof DashboardRoute
+    }
+    '/dashboard/chat': {
+      id: '/dashboard/chat'
+      path: '/chat'
+      fullPath: '/dashboard/chat'
+      preLoaderRoute: typeof DashboardChatRouteImport
       parentRoute: typeof DashboardRoute
     }
     '/dashboard/budget': {
@@ -271,6 +331,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardAssignmentsRouteImport
       parentRoute: typeof DashboardRoute
     }
+    '/dashboard/pdfs/': {
+      id: '/dashboard/pdfs/'
+      path: '/'
+      fullPath: '/dashboard/pdfs/'
+      preLoaderRoute: typeof DashboardPdfsIndexRouteImport
+      parentRoute: typeof DashboardPdfsRoute
+    }
     '/dashboard/notes/': {
       id: '/dashboard/notes/'
       path: '/'
@@ -291,6 +358,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/dashboard/assignments/'
       preLoaderRoute: typeof DashboardAssignmentsIndexRouteImport
       parentRoute: typeof DashboardAssignmentsRoute
+    }
+    '/dashboard/pdfs/$pdfId': {
+      id: '/dashboard/pdfs/$pdfId'
+      path: '/$pdfId'
+      fullPath: '/dashboard/pdfs/$pdfId'
+      preLoaderRoute: typeof DashboardPdfsPdfIdRouteImport
+      parentRoute: typeof DashboardPdfsRoute
     }
     '/dashboard/notes/$noteId': {
       id: '/dashboard/notes/$noteId'
@@ -356,12 +430,28 @@ const DashboardNotesRouteWithChildren = DashboardNotesRoute._addFileChildren(
   DashboardNotesRouteChildren,
 )
 
+interface DashboardPdfsRouteChildren {
+  DashboardPdfsPdfIdRoute: typeof DashboardPdfsPdfIdRoute
+  DashboardPdfsIndexRoute: typeof DashboardPdfsIndexRoute
+}
+
+const DashboardPdfsRouteChildren: DashboardPdfsRouteChildren = {
+  DashboardPdfsPdfIdRoute: DashboardPdfsPdfIdRoute,
+  DashboardPdfsIndexRoute: DashboardPdfsIndexRoute,
+}
+
+const DashboardPdfsRouteWithChildren = DashboardPdfsRoute._addFileChildren(
+  DashboardPdfsRouteChildren,
+)
+
 interface DashboardRouteChildren {
   DashboardAssignmentsRoute: typeof DashboardAssignmentsRouteWithChildren
   DashboardBoardRoute: typeof DashboardBoardRoute
   DashboardBudgetRoute: typeof DashboardBudgetRoute
+  DashboardChatRoute: typeof DashboardChatRoute
   DashboardClassesRoute: typeof DashboardClassesRouteWithChildren
   DashboardNotesRoute: typeof DashboardNotesRouteWithChildren
+  DashboardPdfsRoute: typeof DashboardPdfsRouteWithChildren
   DashboardPlanRoute: typeof DashboardPlanRoute
   DashboardIndexRoute: typeof DashboardIndexRoute
 }
@@ -370,8 +460,10 @@ const DashboardRouteChildren: DashboardRouteChildren = {
   DashboardAssignmentsRoute: DashboardAssignmentsRouteWithChildren,
   DashboardBoardRoute: DashboardBoardRoute,
   DashboardBudgetRoute: DashboardBudgetRoute,
+  DashboardChatRoute: DashboardChatRoute,
   DashboardClassesRoute: DashboardClassesRouteWithChildren,
   DashboardNotesRoute: DashboardNotesRouteWithChildren,
+  DashboardPdfsRoute: DashboardPdfsRouteWithChildren,
   DashboardPlanRoute: DashboardPlanRoute,
   DashboardIndexRoute: DashboardIndexRoute,
 }
