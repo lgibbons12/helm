@@ -876,3 +876,11 @@
 
   ---
   Ready to start implementation! Any questions or clarifications needed? 🚀
+
+
+
+
+To get online we need:
+- setup AWS
+- add environment variables
+- migrate the database
