@@ -157,10 +157,17 @@ async def process_pdf(
         raise  # Re-raise HTTP exceptions (like the extraction failure above)
 
     except Exception as e:
-        # Mark as failed
-        logger.error("Failed to process PDF %s: %s", pdf.filename, str(e), exc_info=True)
-        pdf.extraction_status = "failed"
-        await db.commit()
+        # Rollback the failed transaction before touching ORM attributes
+        await db.rollback()
+
+        # Mark as failed (use pdf_id instead of pdf.filename to avoid lazy-load after rollback)
+        logger.error("Failed to process PDF %s: %s", pdf_id, str(e), exc_info=True)
+        try:
+            pdf = await get_user_resource_or_404(db, PDF, pdf_id, user.id)
+            pdf.extraction_status = "failed"
+            await db.commit()
+        except Exception:
+            logger.error("Could not mark PDF %s as failed after error", pdf_id)
 
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

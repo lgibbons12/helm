@@ -1,7 +1,11 @@
 """PDF text extraction service using PyMuPDF."""
 
+import re
+
 import pymupdf  # PyMuPDF
-from io import BytesIO
+
+# Control characters that Postgres TEXT/VARCHAR cannot store (NUL, etc.)
+_ILLEGAL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
 
 
 class PDFProcessor:
@@ -40,6 +44,10 @@ class PDFProcessor:
 
             # Combine all pages with double newline separator
             full_text = "\n\n".join(text_pages)
+
+            # Strip NUL bytes and other control chars that Postgres rejects
+            full_text = _ILLEGAL_CHARS.sub("", full_text)
+
             page_count = len(doc)
 
             # Close the document
