@@ -86,8 +86,48 @@ class Settings(BaseSettings):
     # This uses samesite="none" + secure=True instead of samesite="lax"
     cookie_cross_domain: bool = False
 
+    # AWS S3 (for PDF storage)
+    aws_access_key_id: str
+    aws_secret_access_key: str
+    aws_s3_bucket: str
+    aws_s3_region: str = "us-east-2"
+    aws_s3_endpoint_url: str | None = None  # Set for MinIO/LocalStack (e.g. http://localhost:9000)
+
+    # Anthropic API
+    anthropic_api_key: str
+
+    # LLM Configuration
+    llm_model: str = "claude-sonnet-4-20250514"
+    llm_max_tokens: int = 4000
+    llm_brain_max_tokens: int = 2000
+
+    # Context limits (characters)
+    pdf_context_max_chars: int = 10000
+    note_context_max_chars: int = 5000
+    max_total_context_chars: int = 100000
+
+    # Brain update settings
+    brain_update_message_interval: int = 5
+    brain_history_window: int = 10
+
+    # PDF upload
+    max_pdf_size_bytes: int = 50 * 1024 * 1024  # 50MB
+
 
 @lru_cache
 def get_settings() -> Settings:
     """Get cached settings instance."""
     return Settings()
+
+
+def sanitize_error(error: Exception, *, generic_message: str = "An internal error occurred.") -> str:
+    """
+    Return a user-safe error message.
+
+    In development, returns the full exception string for debugging.
+    In staging/production, returns a generic message to avoid leaking internals.
+    """
+    settings = get_settings()
+    if settings.environment == "development":
+        return str(error)
+    return generic_message

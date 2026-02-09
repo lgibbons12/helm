@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
@@ -16,9 +17,13 @@ import {
   Heading2,
   Undo,
   Redo,
+  Loader2,
+  Cloud,
+  CloudOff,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { weeklyPlanApi } from '@/lib/api'
 
 // =============================================================================
 // Route
@@ -31,8 +36,6 @@ export const Route = createFileRoute('/dashboard/plan')({
 // =============================================================================
 // Constants
 // =============================================================================
-
-const STORAGE_KEY = 'helm-weekly-plan'
 
 const DEFAULT_CONTENT = `# weekly plan
 
@@ -60,19 +63,82 @@ const DEFAULT_CONTENT = `# weekly plan
 ## notes
 `
 
+const SAVE_DEBOUNCE_MS = 1000
+
+// =============================================================================
+// Helpers
+// =============================================================================
+
+/** Return the Monday of the current week as YYYY-MM-DD. */
+function getCurrentWeekMonday(): string {
+  const today = new Date()
+  const day = today.getDay() // 0=Sun, 1=Mon, ...
+  const diff = day === 0 ? -6 : 1 - day // adjust to Monday
+  const monday = new Date(today)
+  monday.setDate(today.getDate() + diff)
+  return monday.toISOString().split('T')[0]
+}
+
 // =============================================================================
 // Main Component
 // =============================================================================
 
 function WeeklyPlanPage() {
+  const queryClient = useQueryClient()
+  const weekStart = getCurrentWeekMonday()
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const editorReadyRef = useRef(false)
 
-  // Load saved content
-  const getSavedContent = useCallback(() => {
-    if (typeof window === 'undefined') return DEFAULT_CONTENT
-    const saved = localStorage.getItem(STORAGE_KEY)
-    return saved || DEFAULT_CONTENT
+  // Fetch the current week's plan
+  const {
+    data: plan,
+    isLoading,
+    isError,
+  } = useQuery({
+    queryKey: ['weekly-plan', weekStart],
+    queryFn: () => weeklyPlanApi.get(weekStart),
+  })
+
+  // Upsert mutation
+  const upsertMutation = useMutation({
+    mutationFn: weeklyPlanApi.upsert,
+    onSuccess: (data) => {
+      queryClient.setQueryData(['weekly-plan', weekStart], data)
+      setLastSaved(new Date())
+      setIsSaving(false)
+    },
+    onError: () => {
+      setIsSaving(false)
+    },
+  })
+
+  // Debounced save
+  const saveContent = useCallback(
+    (content: string) => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current)
+      }
+      setIsSaving(true)
+      debounceRef.current = setTimeout(() => {
+        upsertMutation.mutate({ week_start: weekStart, content })
+      }, SAVE_DEBOUNCE_MS)
+    },
+    [weekStart, upsertMutation]
+  )
+
+  // Cleanup debounce on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current)
+      }
+    }
   }, [])
+
+  // Determine initial content
+  const initialContent = plan?.content ?? DEFAULT_CONTENT
 
   const editor = useEditor({
     extensions: [
@@ -94,7 +160,7 @@ function WeeklyPlanPage() {
         transformCopiedText: true,
       }),
     ],
-    content: getSavedContent(),
+    content: '',
     editorProps: {
       attributes: {
         class:
@@ -102,25 +168,29 @@ function WeeklyPlanPage() {
       },
     },
     onUpdate: ({ editor }) => {
-      // Auto-save on change
+      // Don't save during initial content load
+      if (!editorReadyRef.current) return
+
       const storage = editor.storage as { markdown?: { getMarkdown: () => string } }
       const content = storage.markdown?.getMarkdown?.() || editor.getText()
-      localStorage.setItem(STORAGE_KEY, content)
-      setLastSaved(new Date())
+      saveContent(content)
     },
   })
 
-  // Set initial content after mount
+  // Set editor content when plan data loads
   useEffect(() => {
-    if (editor && typeof window !== 'undefined') {
-      const saved = localStorage.getItem(STORAGE_KEY)
-      if (saved && editor.isEmpty) {
-        editor.commands.setContent(saved)
-      }
+    if (editor && !isLoading) {
+      // Set flag to false while we programmatically update content
+      editorReadyRef.current = false
+      editor.commands.setContent(initialContent)
+      // Re-enable saving after content is set
+      requestAnimationFrame(() => {
+        editorReadyRef.current = true
+      })
     }
-  }, [editor])
+  }, [editor, isLoading, initialContent])
 
-  if (!editor) {
+  if (isLoading || !editor) {
     return (
       <div className="space-y-4">
         <div className="h-8 w-32 bg-muted animate-pulse rounded" />
@@ -135,10 +205,27 @@ function WeeklyPlanPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-foreground lowercase">weekly plan</h1>
-          <p className="text-xs text-muted-foreground lowercase">
-            {lastSaved
-              ? `saved ${lastSaved.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-              : 'auto-saves as you type'}
+          <p className="text-xs text-muted-foreground lowercase flex items-center gap-1.5">
+            {isError ? (
+              <>
+                <CloudOff className="w-3 h-3" />
+                <span>failed to load — editing locally</span>
+              </>
+            ) : isSaving ? (
+              <>
+                <Loader2 className="w-3 h-3 animate-spin" />
+                <span>saving...</span>
+              </>
+            ) : lastSaved ? (
+              <>
+                <Cloud className="w-3 h-3" />
+                <span>
+                  saved {lastSaved.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </>
+            ) : (
+              'auto-saves as you type'
+            )}
           </p>
         </div>
       </div>

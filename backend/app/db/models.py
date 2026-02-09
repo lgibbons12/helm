@@ -76,6 +76,28 @@ class DayOfWeek(str, PyEnum):
     SUNDAY = "sunday"
 
 
+class ExtractionStatus(str, PyEnum):
+    """PDF text extraction status."""
+
+    PENDING = "pending"
+    SUCCESS = "success"
+    FAILED = "failed"
+
+
+class BrainType(str, PyEnum):
+    """Type of brain memory scope."""
+
+    GLOBAL = "global"
+    CLASS = "class"
+
+
+class ChatRole(str, PyEnum):
+    """Role in chat conversation."""
+
+    USER = "user"
+    ASSISTANT = "assistant"
+
+
 # =============================================================================
 # MODELS
 # =============================================================================
@@ -129,6 +151,18 @@ class User(Base):
     )
     budget_settings: Mapped[Optional["BudgetSettings"]] = relationship(
         "BudgetSettings", back_populates="user", uselist=False, cascade="all, delete-orphan"
+    )
+    weekly_plans: Mapped[list["WeeklyPlan"]] = relationship(
+        "WeeklyPlan", back_populates="user", cascade="all, delete-orphan"
+    )
+    pdfs: Mapped[list["PDF"]] = relationship(
+        "PDF", back_populates="user", cascade="all, delete-orphan"
+    )
+    chat_conversations: Mapped[list["ChatConversation"]] = relationship(
+        "ChatConversation", back_populates="user", cascade="all, delete-orphan"
+    )
+    brain_memories: Mapped[list["BrainMemory"]] = relationship(
+        "BrainMemory", back_populates="user", cascade="all, delete-orphan"
     )
 
 
@@ -226,6 +260,12 @@ class Class(Base):
     notes: Mapped[list["Note"]] = relationship(
         "Note", back_populates="class_", passive_deletes=True
     )
+    pdfs: Mapped[list["PDF"]] = relationship(
+        "PDF", back_populates="class_", passive_deletes=True
+    )
+    brain_memories: Mapped[list["BrainMemory"]] = relationship(
+        "BrainMemory", back_populates="class_", passive_deletes=True
+    )
 
 
 class Assignment(Base):
@@ -288,6 +328,9 @@ class Assignment(Base):
     )
     notes: Mapped[list["Note"]] = relationship(
         "Note", back_populates="assignment", passive_deletes=True
+    )
+    pdfs: Mapped[list["PDF"]] = relationship(
+        "PDF", back_populates="assignment", passive_deletes=True
     )
 
 
@@ -480,3 +523,227 @@ class BudgetSettings(Base):
 
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="budget_settings")
+
+
+class WeeklyPlan(Base):
+    """
+    Weekly plan document (one per user per week).
+
+    Keyed by week_start (the Monday of each week).
+    Content is stored as markdown for the TipTap editor.
+    """
+
+    __tablename__ = "weekly_plans"
+    __table_args__ = (
+        UniqueConstraint("user_id", "week_start", name="unique_user_week_plan"),
+        Index("idx_weekly_plans_user_week", "user_id", "week_start"),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    week_start: Mapped[date] = mapped_column(nullable=False)  # Monday of the week
+    content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Markdown
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=text("NOW()"), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=text("NOW()"), nullable=False
+    )
+
+    # Relationships
+    user: Mapped["User"] = relationship("User", back_populates="weekly_plans")
+
+
+class PDF(Base):
+    """
+    PDF file metadata and extracted content.
+
+    Stores reference to S3 file and extracted text for LLM context.
+    Can be attached to a class or assignment for organization.
+    """
+
+    __tablename__ = "pdfs"
+    __table_args__ = (
+        Index("idx_pdfs_user_id", "user_id"),
+        Index("idx_pdfs_class_id", "class_id"),
+        Index("idx_pdfs_assignment_id", "assignment_id"),
+        Index("idx_pdfs_s3_key", "s3_key"),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    class_id: Mapped[Optional[UUID]] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("classes.id", ondelete="SET NULL"), nullable=True
+    )
+    assignment_id: Mapped[Optional[UUID]] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("assignments.id", ondelete="SET NULL"), nullable=True
+    )
+
+    # File metadata
+    filename: Mapped[str] = mapped_column(String(), nullable=False)
+    s3_key: Mapped[str] = mapped_column(String(), unique=True, nullable=False)
+    content_type: Mapped[str] = mapped_column(
+        String(), nullable=False, server_default="application/pdf"
+    )
+    file_size_bytes: Mapped[Optional[int]] = mapped_column(nullable=True)
+
+    # Extracted content for LLM context
+    extracted_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    extraction_status: Mapped[str] = mapped_column(
+        String(), nullable=False, server_default="pending"
+    )
+    page_count: Mapped[Optional[int]] = mapped_column(nullable=True)
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=text("NOW()"), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=text("NOW()"), nullable=False
+    )
+
+    # Relationships
+    user: Mapped["User"] = relationship("User", back_populates="pdfs")
+    class_: Mapped[Optional["Class"]] = relationship("Class", back_populates="pdfs")
+    assignment: Mapped[Optional["Assignment"]] = relationship("Assignment", back_populates="pdfs")
+
+
+class ChatConversation(Base):
+    """
+    Chat conversation with LLM.
+
+    Groups messages and tracks context (PDFs, classes, assignments in scope).
+    """
+
+    __tablename__ = "chat_conversations"
+    __table_args__ = (Index("idx_chat_conversations_user_id", "user_id"),)
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    title: Mapped[str] = mapped_column(
+        String(), nullable=False, server_default="New Conversation"
+    )
+
+    # Context - what PDFs/classes/assignments are in scope
+    context_class_ids: Mapped[list[UUID]] = mapped_column(
+        ARRAY(PGUUID(as_uuid=True)), nullable=False, server_default="{}"
+    )
+    context_assignment_ids: Mapped[list[UUID]] = mapped_column(
+        ARRAY(PGUUID(as_uuid=True)), nullable=False, server_default="{}"
+    )
+    context_pdf_ids: Mapped[list[UUID]] = mapped_column(
+        ARRAY(PGUUID(as_uuid=True)), nullable=False, server_default="{}"
+    )
+    context_note_ids: Mapped[list[UUID]] = mapped_column(
+        ARRAY(PGUUID(as_uuid=True)), nullable=False, server_default="{}"
+    )
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=text("NOW()"), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=text("NOW()"), nullable=False
+    )
+
+    # Relationships
+    user: Mapped["User"] = relationship("User", back_populates="chat_conversations")
+    messages: Mapped[list["ChatMessage"]] = relationship(
+        "ChatMessage", back_populates="conversation", cascade="all, delete-orphan"
+    )
+
+
+class ChatMessage(Base):
+    """
+    Individual message in a chat conversation.
+
+    Stores user messages and assistant responses.
+    """
+
+    __tablename__ = "chat_messages"
+    __table_args__ = (Index("idx_chat_messages_conversation_id", "conversation_id"),)
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    conversation_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("chat_conversations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    role: Mapped[str] = mapped_column(String(), nullable=False)  # 'user' or 'assistant'
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # Timestamp
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=text("NOW()"), nullable=False
+    )
+
+    # Relationships
+    conversation: Mapped["ChatConversation"] = relationship(
+        "ChatConversation", back_populates="messages"
+    )
+
+
+class BrainMemory(Base):
+    """
+    Persistent knowledge base (brain) for LLM context.
+
+    Can be global (user-wide) or class-specific.
+    Content is markdown that accumulates learning from conversations and PDFs.
+    """
+
+    __tablename__ = "brain_memories"
+    __table_args__ = (
+        UniqueConstraint("user_id", "class_id", "brain_type", name="unique_user_class_brain"),
+        Index("idx_brain_memories_user_id", "user_id"),
+        Index("idx_brain_memories_class_id", "class_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    class_id: Mapped[Optional[UUID]] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("classes.id", ondelete="CASCADE"), nullable=True
+    )
+
+    # If class_id is NULL, this is the global brain
+    brain_type: Mapped[str] = mapped_column(
+        String(), nullable=False, server_default="class"
+    )  # 'global' or 'class'
+
+    # The actual brain content (Markdown)
+    content: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+
+    # Metadata
+    last_updated_by_conversation_id: Mapped[Optional[UUID]] = mapped_column(
+        PGUUID(as_uuid=True), nullable=True
+    )
+    update_count: Mapped[int] = mapped_column(nullable=False, server_default="0")
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=text("NOW()"), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=text("NOW()"), nullable=False
+    )
+
+    # Relationships
+    user: Mapped["User"] = relationship("User", back_populates="brain_memories")
+    class_: Mapped[Optional["Class"]] = relationship("Class", back_populates="brain_memories")

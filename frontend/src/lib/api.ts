@@ -95,6 +95,16 @@ export const api = {
     return handleResponse<T>(response)
   },
 
+  async put<T>(path: string, data?: unknown): Promise<T> {
+    const response = await fetch(`${API_BASE}${path}`, {
+      method: 'PUT',
+      credentials: 'include',
+      headers: getHeaders(),
+      body: data ? JSON.stringify(data) : undefined,
+    })
+    return handleResponse<T>(response)
+  },
+
   async patch<T>(path: string, data: unknown): Promise<T> {
     const response = await fetch(`${API_BASE}${path}`, {
       method: 'PATCH',
@@ -202,6 +212,24 @@ export interface NoteListParams {
   tag?: string
   q?: string
   standalone?: boolean
+}
+
+// =============================================================================
+// Weekly Plan Types
+// =============================================================================
+
+export interface WeeklyPlan {
+  id: string
+  user_id: string
+  week_start: string  // YYYY-MM-DD (Monday of the week)
+  content: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface WeeklyPlanUpsert {
+  week_start: string
+  content: string | null
 }
 
 // =============================================================================
@@ -401,4 +429,228 @@ export const transactionsApi = {
 
   getWeeklyAverage: () =>
     api.get<WeeklyAverage>('/transactions/stats/weekly-average'),
+}
+
+// =============================================================================
+// PDF Types
+// =============================================================================
+
+export interface PDF {
+  id: string
+  user_id: string
+  filename: string
+  s3_key: string
+  content_type: string
+  file_size_bytes: number | null
+  extraction_status: 'pending' | 'success' | 'failed'
+  page_count: number | null
+  class_id: string | null
+  assignment_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface PDFWithText extends PDF {
+  extracted_text: string | null
+}
+
+export interface PDFUploadURLResponse {
+  upload_url: string
+  fields: Record<string, string>
+  pdf_id: string
+}
+
+export interface PDFProcessResponse {
+  status: string
+  page_count: number
+  text_length: number | null
+}
+
+export interface PDFListResponse {
+  pdfs: PDF[]
+  total: number
+}
+
+// =============================================================================
+// Chat Types
+// =============================================================================
+
+export interface Conversation {
+  id: string
+  user_id: string
+  title: string
+  context_class_ids: string[]
+  context_assignment_ids: string[]
+  context_pdf_ids: string[]
+  context_note_ids: string[]
+  created_at: string
+  updated_at: string
+}
+
+export interface ChatMessage {
+  id: string
+  conversation_id: string
+  role: 'user' | 'assistant'
+  content: string
+  created_at: string
+}
+
+export interface ConversationWithMessages extends Conversation {
+  messages: ChatMessage[]
+}
+
+export interface ConversationListResponse {
+  conversations: Conversation[]
+  total: number
+}
+
+export interface ConversationCreateRequest {
+  title?: string
+  context_class_ids?: string[]
+  context_assignment_ids?: string[]
+  context_pdf_ids?: string[]
+  context_note_ids?: string[]
+}
+
+export interface ConversationUpdateContextRequest {
+  context_class_ids?: string[]
+  context_assignment_ids?: string[]
+  context_pdf_ids?: string[]
+  context_note_ids?: string[]
+}
+
+export interface BrainResponse {
+  content: string
+  update_count: number
+  brain_type: 'global' | 'class'
+  class_id: string | null
+  last_updated_by_conversation_id: string | null
+  updated_at: string
+}
+
+export const weeklyPlanApi = {
+  get: (weekStart?: string) =>
+    api.get<WeeklyPlan | null>(
+      `/weekly-plan${weekStart ? `?week_start=${weekStart}` : ''}`
+    ),
+
+  upsert: (data: WeeklyPlanUpsert) =>
+    api.put<WeeklyPlan>('/weekly-plan', data),
+}
+
+// =============================================================================
+// PDF API
+// =============================================================================
+
+export const pdfApi = {
+  getUploadUrl: (filename: string, classId?: string, assignmentId?: string) =>
+    api.post<PDFUploadURLResponse>('/pdfs/upload-url', {
+      filename,
+      class_id: classId || null,
+      assignment_id: assignmentId || null,
+    }),
+
+  processPdf: (pdfId: string) =>
+    api.post<PDFProcessResponse>(`/pdfs/${pdfId}/process`),
+
+  list: (params?: { class_id?: string; assignment_id?: string }) =>
+    api.get<PDFListResponse>(`/pdfs/${buildQueryString(params)}`),
+
+  get: (id: string) => api.get<PDFWithText>(`/pdfs/${id}`),
+
+  delete: (id: string) => api.delete(`/pdfs/${id}`),
+}
+
+// =============================================================================
+// Chat API
+// =============================================================================
+
+export const chatApi = {
+  createConversation: (data: ConversationCreateRequest) =>
+    api.post<Conversation>('/chat/conversations', data),
+
+  listConversations: () =>
+    api.get<ConversationListResponse>('/chat/conversations'),
+
+  getConversation: (id: string) =>
+    api.get<ConversationWithMessages>(`/chat/conversations/${id}`),
+
+  updateContext: (id: string, data: ConversationUpdateContextRequest) =>
+    api.patch<Conversation>(`/chat/conversations/${id}`, data),
+
+  deleteConversation: (id: string) =>
+    api.delete(`/chat/conversations/${id}`),
+
+  /**
+   * Stream a chat message response using SSE.
+   * Returns an async iterator of text chunks.
+   */
+  streamMessage: async function* (conversationId: string, message: string) {
+    const headers: HeadersInit = { 'Content-Type': 'application/json' }
+    const token = tokenStorage.get()
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`
+    }
+
+    const response = await fetch(
+      `${API_BASE}/chat/conversations/${conversationId}/messages/stream`,
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers,
+        body: JSON.stringify({ message }),
+      }
+    )
+
+    if (!response.ok) {
+      throw new ApiError(response.status, 'Failed to stream message')
+    }
+
+    const reader = response.body?.getReader()
+    if (!reader) throw new Error('No response body')
+
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+
+      // Parse SSE events from buffer
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || '' // Keep incomplete line in buffer
+
+      let nextIsError = false
+      for (const line of lines) {
+        if (line.startsWith('event: done')) {
+          return
+        }
+        if (line.startsWith('event: error')) {
+          nextIsError = true
+          continue
+        }
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6)
+          if (nextIsError) {
+            throw new Error(data || 'Stream error from server')
+          }
+          if (data) yield data
+        }
+      }
+    }
+  },
+
+  updateBrain: (conversationId: string) =>
+    api.post<{ status: string; brains: Array<{ brain_type: string; class_id: string | null }> }>(
+      `/chat/conversations/${conversationId}/update-brain`
+    ),
+
+  getGlobalBrain: () => api.get<BrainResponse>('/chat/brains/global'),
+
+  getClassBrain: (classId: string) =>
+    api.get<BrainResponse>(`/chat/brains/class/${classId}`),
+
+  listBrains: () => api.get<BrainResponse[]>('/chat/brains'),
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Plus,
@@ -13,6 +13,7 @@ import {
   Check,
   CircleDot,
   CircleDashed,
+  Pencil,
 } from 'lucide-react'
 import { format } from 'date-fns'
 
@@ -93,6 +94,7 @@ function AssignmentsPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [addingForClass, setAddingForClass] = useState<string | null>(null)
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
 
   // Fetch assignments
   const {
@@ -197,6 +199,7 @@ function AssignmentsPage() {
               expandedId={expandedId}
               isAddingNew={addingForClass === (group.class?.id || 'no-class')}
               onToggleExpand={(id) => setExpandedId(expandedId === id ? null : id)}
+              onNavigate={(id) => navigate({ to: '/dashboard/assignments/$assignmentId', params: { assignmentId: id }, search: { from: 'assignments' } })}
               onStartAdd={() => setAddingForClass(group.class?.id || 'no-class')}
               onCancelAdd={() => setAddingForClass(null)}
               onSaveNew={(data) => createAssignment.mutate(data)}
@@ -306,6 +309,7 @@ interface ClassSectionProps {
   expandedId: string | null
   isAddingNew: boolean
   onToggleExpand: (id: string) => void
+  onNavigate: (id: string) => void
   onStartAdd: () => void
   onCancelAdd: () => void
   onSaveNew: (data: AssignmentCreate) => void
@@ -320,6 +324,7 @@ function ClassSection({
   expandedId,
   isAddingNew,
   onToggleExpand,
+  onNavigate,
   onStartAdd,
   onCancelAdd,
   onSaveNew,
@@ -423,7 +428,8 @@ function ClassSection({
                   <AssignmentRow
                     key={assignment.id}
                     assignment={assignment}
-                    onClick={() => onToggleExpand(assignment.id)}
+                    onClick={() => onNavigate(assignment.id)}
+                    onEdit={() => onToggleExpand(assignment.id)}
                   />
                 )
               )}
@@ -448,9 +454,11 @@ function ClassSection({
 function AssignmentRow({
   assignment,
   onClick,
+  onEdit,
 }: {
   assignment: Assignment
   onClick: () => void
+  onEdit: () => void
 }) {
   const isFinished = assignment.status === 'finished'
 
@@ -499,7 +507,20 @@ function AssignmentRow({
       <span className="text-xs text-muted-foreground lowercase truncate">
         {assignment.status.replace(/_/g, ' ')}
       </span>
-      <div className="w-16"></div>
+      <div className="w-16 flex justify-end">
+        <Button
+          size="icon"
+          variant="ghost"
+          onClick={(e) => {
+            e.stopPropagation()
+            onEdit()
+          }}
+          className="h-7 w-7 text-muted-foreground hover:text-foreground"
+          title="quick edit"
+        >
+          <Pencil className="w-3.5 h-3.5" />
+        </Button>
+      </div>
     </div>
   )
 }

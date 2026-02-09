@@ -3,6 +3,7 @@ import {
   Compass,
   BookOpen,
   FileText,
+  FileUp,
   Wallet,
   Settings,
   LogOut,
@@ -11,8 +12,9 @@ import {
   GraduationCap,
   LayoutGrid,
   ClipboardList,
+  Eye,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 import { useAuth } from '../lib/auth'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -27,8 +29,11 @@ const navItems = [
   { to: '/dashboard/board', icon: LayoutGrid, label: 'board' },
   { to: '/dashboard/plan', icon: ClipboardList, label: 'plan' },
   { to: '/dashboard/notes', icon: FileText, label: 'notes' },
+  { to: '/dashboard/pdfs', icon: FileUp, label: 'pdfs' },
   { to: '/dashboard/budget', icon: Wallet, label: 'budget' },
 ]
+
+const odinNav = { to: '/dashboard/odin', icon: Eye, label: 'odin' } as const
 
 function DashboardLayout() {
   const { user, isLoading, isAuthenticated, logout } = useAuth()
@@ -36,8 +41,13 @@ function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   // Redirect to home if not authenticated
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      navigate({ to: '/' })
+    }
+  }, [isLoading, isAuthenticated, navigate])
+
   if (!isLoading && !isAuthenticated) {
-    navigate({ to: '/' })
     return null
   }
 
@@ -92,22 +102,40 @@ function DashboardLayout() {
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 px-4 space-y-1">
-            {navItems.map((item) => (
+          <nav className="flex-1 px-4 flex flex-col">
+            <div className="space-y-1">
+              {navItems.map((item) => (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  onClick={() => setSidebarOpen(false)}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                  activeProps={{
+                    className:
+                      'flex items-center gap-3 px-4 py-3 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90',
+                  }}
+                >
+                  <item.icon className="w-5 h-5" />
+                  <span className="font-medium">{item.label}</span>
+                </Link>
+              ))}
+            </div>
+
+            {/* Odin — visually distinct */}
+            <div className="mt-auto pt-3 pb-2 border-t border-border/30">
               <Link
-                key={item.to}
-                to={item.to}
+                to={odinNav.to}
                 onClick={() => setSidebarOpen(false)}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                className="flex items-center gap-3 px-4 py-3 rounded-xl text-muted-foreground hover:text-foreground hover:bg-foreground/5 transition-colors"
                 activeProps={{
                   className:
-                    'flex items-center gap-3 px-4 py-3 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90',
+                    'flex items-center gap-3 px-4 py-3 rounded-xl bg-foreground text-background hover:bg-foreground/90',
                 }}
               >
-                <item.icon className="w-5 h-5" />
-                <span className="font-medium">{item.label}</span>
+                <odinNav.icon className="w-5 h-5" />
+                <span className="font-semibold tracking-wide">{odinNav.label}</span>
               </Link>
-            ))}
+            </div>
           </nav>
 
           {/* User section */}
@@ -165,6 +193,7 @@ function DashboardLayout() {
           <Outlet />
         </main>
       </div>
+
     </div>
   )
 }

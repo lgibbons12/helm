@@ -21,6 +21,24 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+  minio:
+    image: minio/minio:latest
+    container_name: helm-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"   # API
+      - "9001:9001"   # Console UI
+    environment:
+      MINIO_ROOT_USER: helm_minio
+      MINIO_ROOT_PASSWORD: helm_minio_password
+    volumes:
+      - helm_minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # Optional: pgAdmin for database management UI
   # Uncomment if you want a web UI for the database
@@ -40,4 +58,6 @@ services:
 
 volumes:
   helm_postgres_data:
+    driver: local
+  helm_minio_data:
     driver: local

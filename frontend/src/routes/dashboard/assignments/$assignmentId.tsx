@@ -6,18 +6,22 @@ import {
   Calendar,
   Clock,
   FileText,
+  FileUp,
   Plus,
   Trash2,
   CheckCircle2,
+  XCircle,
   Circle,
   CircleDot,
   CircleDashed,
+  Upload,
 } from 'lucide-react'
 import { format } from 'date-fns'
 
 import {
   assignmentsApi,
   notesApi,
+  pdfApi,
   type Note,
   type NoteCreate,
   type AssignmentStatus,
@@ -27,6 +31,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { NotesList } from '@/components/notes-list'
 import { NoteEditor } from '@/components/note-editor'
+import { PDFUpload } from '@/components/pdf-upload'
 import {
   Dialog,
   DialogContent,
@@ -295,6 +300,9 @@ function AssignmentDetailPage() {
         </div>
       </div>
 
+      {/* PDFs section */}
+      <AssignmentPdfsSection assignmentId={assignmentId} />
+
       {/* Delete confirmation dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent className="glass-strong border-0">
@@ -323,6 +331,88 @@ function AssignmentDetailPage() {
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+function AssignmentPdfsSection({ assignmentId }: { assignmentId: string }) {
+  const queryClient = useQueryClient()
+  const [showUpload, setShowUpload] = useState(false)
+
+  const { data: pdfsData, isLoading } = useQuery({
+    queryKey: ['pdfs', { assignmentId }],
+    queryFn: () => pdfApi.list({ assignment_id: assignmentId }),
+  })
+  const pdfs = pdfsData?.pdfs || []
+
+  return (
+    <div className="glass-card p-6">
+      <div className="flex items-center justify-between mb-4 pb-4 border-b border-border/50">
+        <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+          <FileUp className="w-4 h-4" />
+          pdfs ({pdfs.length})
+        </h2>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setShowUpload(!showUpload)}
+          className="gap-1 lowercase text-xs"
+        >
+          <Upload className="w-3.5 h-3.5" />
+          {showUpload ? 'hide' : 'upload'}
+        </Button>
+      </div>
+
+      {showUpload && (
+        <div className="mb-4 pb-4 border-b border-border/30">
+          <PDFUpload
+            assignmentId={assignmentId}
+            onUploadComplete={() => {
+              setShowUpload(false)
+              queryClient.invalidateQueries({ queryKey: ['pdfs'] })
+            }}
+          />
+        </div>
+      )}
+
+      {isLoading ? (
+        <div className="space-y-2">
+          <Skeleton className="h-10 w-full rounded-lg" />
+        </div>
+      ) : pdfs.length === 0 ? (
+        <div className="py-6 text-center">
+          <FileUp className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
+          <p className="text-sm text-muted-foreground lowercase">no pdfs attached to this assignment</p>
+        </div>
+      ) : (
+        <div className="space-y-1">
+          {pdfs.map((pdf) => (
+            <Link
+              key={pdf.id}
+              to="/dashboard/pdfs/$pdfId"
+              params={{ pdfId: pdf.id }}
+              className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted/20 transition-colors"
+            >
+              <FileUp className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+              <span className="text-sm text-foreground truncate lowercase flex-1">
+                {pdf.filename}
+              </span>
+              {pdf.page_count && (
+                <span className="text-[10px] text-muted-foreground">{pdf.page_count}p</span>
+              )}
+              {pdf.extraction_status === 'success' && (
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+              )}
+              {pdf.extraction_status === 'failed' && (
+                <XCircle className="w-3.5 h-3.5 text-destructive flex-shrink-0" />
+              )}
+              {pdf.extraction_status === 'pending' && (
+                <Clock className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+              )}
+            </Link>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
