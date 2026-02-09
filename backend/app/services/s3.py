@@ -18,9 +18,13 @@ class S3Service:
             "aws_secret_access_key": settings.aws_secret_access_key,
             "region_name": settings.aws_s3_region,
         }
-        # Support MinIO / LocalStack by pointing to a custom endpoint
+        # Support MinIO / LocalStack by pointing to a custom endpoint.
+        # For real S3, use the regional endpoint to avoid 307 redirects
+        # that break browser CORS on presigned uploads.
         if settings.aws_s3_endpoint_url:
             client_kwargs["endpoint_url"] = settings.aws_s3_endpoint_url
+        else:
+            client_kwargs["endpoint_url"] = f"https://s3.{settings.aws_s3_region}.amazonaws.com"
 
         self.s3_client = boto3.client("s3", **client_kwargs)
         self.bucket = settings.aws_s3_bucket
