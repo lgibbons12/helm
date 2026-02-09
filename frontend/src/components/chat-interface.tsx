@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo, memo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Send,
@@ -21,6 +21,7 @@ import {
   notesApi,
   assignmentsApi,
   type ChatMessage,
+  type ConversationWithMessages,
   type ConversationUpdateContextRequest,
 } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
@@ -47,7 +48,7 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
   // Fetch conversation with messages
-  const { data: conversation, isLoading } = useQuery({
+  const { data: conversation, isLoading, isError: isConversationError, refetch: refetchConversation } = useQuery({
     queryKey: ['conversation', conversationId],
     queryFn: () => chatApi.getConversation(conversationId),
   })
@@ -137,7 +138,7 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
   const retryLastMessage = useCallback(() => {
     if (!lastFailedMessage) return
     // Remove the optimistic user message that failed
-    setLocalMessages((prev) => prev.filter((m) => m.content !== lastFailedMessage || m.role !== 'user' || !m.id.startsWith('temp-')))
+    setLocalMessages((prev) => prev.filter((m) => !(m.content === lastFailedMessage && m.role === 'user' && m.id.startsWith('temp-'))))
     setError(null)
     sendMessageText(lastFailedMessage)
   }, [lastFailedMessage, sendMessageText])
@@ -242,6 +243,20 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
     return (
       <div className="flex-1 flex items-center justify-center">
         <Loader2 className="w-6 h-6 text-muted-foreground animate-spin" />
+      </div>
+    )
+  }
+
+  if (isConversationError) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-center space-y-3">
+          <p className="text-sm text-destructive lowercase">failed to load conversation</p>
+          <Button variant="outline" size="sm" className="lowercase" onClick={() => refetchConversation()}>
+            <RotateCcw className="w-3 h-3 mr-1.5" />
+            retry
+          </Button>
+        </div>
       </div>
     )
   }
@@ -388,7 +403,7 @@ function ContextBar({
   onRemove: (type: string, id: string) => void
   onAddClick: () => void
   showPopover: boolean
-  conversation: any
+  conversation: ConversationWithMessages | undefined
   onContextChange: (ctx: ChatContext) => void
   onClosePopover: () => void
 }) {
@@ -491,7 +506,7 @@ function ContextBar({
 // Message Bubble
 // =============================================================================
 
-function MessageBubble({ message, userInitials }: { message: ChatMessage; userInitials: string }) {
+const MessageBubble = memo(function MessageBubble({ message, userInitials }: { message: ChatMessage; userInitials: string }) {
   const isUser = message.role === 'user'
 
   return (
@@ -530,4 +545,4 @@ function MessageBubble({ message, userInitials }: { message: ChatMessage; userIn
       </div>
     </div>
   )
-}
+})

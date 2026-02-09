@@ -622,16 +622,20 @@ export const chatApi = {
       const lines = buffer.split('\n')
       buffer = lines.pop() || '' // Keep incomplete line in buffer
 
+      let nextIsError = false
       for (const line of lines) {
         if (line.startsWith('event: done')) {
           return
         }
         if (line.startsWith('event: error')) {
-          // Next data line will have the error
+          nextIsError = true
           continue
         }
         if (line.startsWith('data: ')) {
           const data = line.slice(6)
+          if (nextIsError) {
+            throw new Error(data || 'Stream error from server')
+          }
           if (data) yield data
         }
       }

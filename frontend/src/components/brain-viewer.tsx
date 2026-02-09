@@ -9,7 +9,7 @@ interface BrainViewerProps {
 }
 
 export function BrainViewer({ classId }: BrainViewerProps) {
-  const { data: brain, isLoading } = useQuery({
+  const { data: brain, isLoading, isError } = useQuery({
     queryKey: ['brain', classId || 'global'],
     queryFn: () =>
       classId ? chatApi.getClassBrain(classId) : chatApi.getGlobalBrain(),
@@ -27,6 +27,22 @@ export function BrainViewer({ classId }: BrainViewerProps) {
         <div className="flex items-center justify-center py-4">
           <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" />
         </div>
+      </div>
+    )
+  }
+
+  if (isError) {
+    return (
+      <div className="glass-card p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Brain className="w-4 h-4 text-muted-foreground" />
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            brain
+          </span>
+        </div>
+        <p className="text-xs text-destructive/70 lowercase">
+          failed to load brain
+        </p>
       </div>
     )
   }

@@ -39,7 +39,7 @@ function OdinPage() {
   const [showBrain, setShowBrain] = useState(false)
 
   // Fetch conversations
-  const { data: conversationsData, isLoading } = useQuery({
+  const { data: conversationsData, isLoading, isError: isConversationsError, refetch: refetchConversations } = useQuery({
     queryKey: ['conversations'],
     queryFn: () => chatApi.listConversations(),
   })
@@ -128,7 +128,19 @@ function OdinPage() {
 
         {/* Conversation list */}
         <div className="flex-1 overflow-y-auto px-2 pb-2 space-y-0.5">
-          {isLoading ? (
+          {isConversationsError ? (
+            <div className="px-3 py-8 text-center space-y-2">
+              <p className="text-[10px] text-destructive lowercase">
+                failed to load sessions
+              </p>
+              <button
+                onClick={() => refetchConversations()}
+                className="text-[10px] text-muted-foreground hover:text-foreground lowercase underline"
+              >
+                retry
+              </button>
+            </div>
+          ) : isLoading ? (
             <div className="space-y-2 px-2 pt-1">
               {[1, 2, 3].map((i) => (
                 <Skeleton key={i} className="h-12 w-full rounded-lg" />
