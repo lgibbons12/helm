@@ -45,7 +45,13 @@ function PdfsIndexPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [classFilter, setClassFilter] = useState<string>('all')
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false)
+  const [uploadClassId, setUploadClassId] = useState<string | undefined>(undefined)
   const [deleteTarget, setDeleteTarget] = useState<PDF | null>(null)
+
+  const openUploadDialog = (classId?: string) => {
+    setUploadClassId(classId)
+    setUploadDialogOpen(true)
+  }
 
   // Fetch data
   const { data: pdfsData, isLoading: pdfsLoading } = useQuery({
@@ -110,7 +116,11 @@ function PdfsIndexPage() {
       groups[key].pdfs.push(pdf)
     }
 
-    // Only return non-empty groups
+    // When no search/filter active, show all class groups (even empty ones) so users can upload
+    // When filtering, only show non-empty groups
+    if (!searchQuery.trim() && classFilter === 'all') {
+      return Object.entries(groups)
+    }
     return Object.entries(groups).filter(([, g]) => g.pdfs.length > 0)
   }, [filteredPdfs, classes])
 
@@ -140,7 +150,7 @@ function PdfsIndexPage() {
           </p>
         </div>
         <Button
-          onClick={() => setUploadDialogOpen(true)}
+          onClick={() => openUploadDialog()}
           className="gap-2 lowercase"
         >
           <Plus className="w-4 h-4" />
@@ -182,7 +192,7 @@ function PdfsIndexPage() {
             <Skeleton key={i} className="h-14 w-full rounded-lg" />
           ))}
         </div>
-      ) : filteredPdfs.length === 0 ? (
+      ) : filteredPdfs.length === 0 && grouped.length === 0 ? (
         <div className="glass-card p-12 text-center">
           <FileText className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
           <h3 className="text-lg font-semibold text-foreground lowercase mb-1">no pdfs found</h3>
@@ -192,7 +202,7 @@ function PdfsIndexPage() {
               : 'upload your first pdf to get started'}
           </p>
           {!searchQuery && classFilter === 'all' && (
-            <Button onClick={() => setUploadDialogOpen(true)} className="gap-2 lowercase">
+            <Button onClick={() => openUploadDialog()} className="gap-2 lowercase">
               <Plus className="w-4 h-4" />
               upload pdf
             </Button>
@@ -213,16 +223,31 @@ function PdfsIndexPage() {
                 {!group.color && groupKey !== 'general' && (
                   <GraduationCap className="w-3.5 h-3.5 text-muted-foreground" />
                 )}
-                <span className="text-xs font-medium text-muted-foreground lowercase">
+                <span className="text-xs font-medium text-muted-foreground lowercase flex-1">
                   {group.name}
                 </span>
                 <span className="text-[10px] text-muted-foreground/50">
                   ({group.pdfs.length})
                 </span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 gap-1 px-2 text-[10px] text-muted-foreground hover:text-foreground lowercase"
+                  onClick={() => openUploadDialog(groupKey === 'general' ? undefined : groupKey)}
+                  aria-label={`upload pdf to ${group.name}`}
+                >
+                  <Plus className="w-3 h-3" />
+                  upload
+                </Button>
               </div>
 
               {/* PDF rows */}
               <div className="divide-y divide-border/20">
+                {group.pdfs.length === 0 && (
+                  <div className="px-4 py-3 text-xs text-muted-foreground/50 lowercase text-center">
+                    no pdfs yet
+                  </div>
+                )}
                 {group.pdfs.map((pdf) => (
                   <div
                     key={pdf.id}
@@ -278,17 +303,21 @@ function PdfsIndexPage() {
       )}
 
       {/* Upload Dialog */}
-      <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
+      <Dialog open={uploadDialogOpen} onOpenChange={(open) => { setUploadDialogOpen(open); if (!open) setUploadClassId(undefined) }}>
         <DialogContent className="glass-strong border-0">
           <DialogHeader>
             <DialogTitle className="lowercase">upload pdf</DialogTitle>
             <DialogDescription className="lowercase">
-              upload a pdf document to extract its text for ai context
+              {uploadClassId && classMap[uploadClassId]
+                ? `upload a pdf to ${classMap[uploadClassId]}`
+                : 'upload a pdf document to extract its text for ai context'}
             </DialogDescription>
           </DialogHeader>
           <PDFUpload
+            classId={uploadClassId}
             onUploadComplete={() => {
               setUploadDialogOpen(false)
+              setUploadClassId(undefined)
               queryClient.invalidateQueries({ queryKey: ['pdfs'] })
             }}
           />

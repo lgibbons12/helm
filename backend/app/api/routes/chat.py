@@ -1,5 +1,7 @@
 """API routes for chat conversations with streaming support."""
 
+import asyncio
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, status
@@ -7,7 +9,15 @@ from sqlalchemy import select, func
 from sse_starlette.sse import EventSourceResponse
 
 from app.api.deps import CurrentUser, DbSession, get_user_resource_or_404
-from app.db.models import ChatConversation, ChatMessage, BrainMemory
+from app.db.models import (
+    ChatConversation,
+    ChatMessage,
+    BrainMemory,
+    Class,
+    Assignment,
+    PDF,
+    Note,
+)
 from app.schemas.chat import (
     ConversationCreateRequest,
     ConversationResponse,
@@ -18,9 +28,123 @@ from app.schemas.chat import (
     BrainResponse,
     ConversationUpdateContextRequest,
 )
+from app.config import sanitize_error
+from app.db.session import AsyncSessionLocal
 from app.services import chat_service, brain_manager
 
+logger = logging.getLogger(__name__)
+
+
+async def _update_brains_background(
+    user_id: UUID,
+    conversation_id: UUID,
+    context_class_ids: list[UUID],
+    conversation_history: list[dict],
+) -> None:
+    """
+    Update brains in the background using a fresh database session.
+
+    This runs as an asyncio task so it doesn't block the SSE stream completion.
+    """
+    try:
+        async with AsyncSessionLocal() as db:
+            # Update class brains
+            for class_id in context_class_ids:
+                try:
+                    brain = await brain_manager.get_or_create_brain(db, user_id, class_id)
+                    await brain_manager.update_brain_after_conversation(
+                        db=db,
+                        brain=brain,
+                        conversation_history=conversation_history,
+                        conversation_id=conversation_id,
+                    )
+                except Exception:
+                    logger.exception("Failed to update class brain %s", class_id)
+
+            # Update global brain
+            try:
+                global_brain = await brain_manager.get_or_create_brain(db, user_id, None)
+                await brain_manager.update_brain_after_conversation(
+                    db=db,
+                    brain=global_brain,
+                    conversation_history=conversation_history,
+                    conversation_id=conversation_id,
+                )
+            except Exception:
+                logger.exception("Failed to update global brain")
+
+            await db.commit()
+    except Exception:
+        logger.exception("Background brain update task failed")
+
 router = APIRouter(prefix="/chat", tags=["chat"])
+
+
+# =============================================================================
+# HELPERS
+# =============================================================================
+
+
+async def _validate_context_ids(
+    db,
+    user_id: UUID,
+    class_ids: list[UUID] | None = None,
+    assignment_ids: list[UUID] | None = None,
+    pdf_ids: list[UUID] | None = None,
+    note_ids: list[UUID] | None = None,
+) -> None:
+    """
+    Validate that all provided context IDs belong to the current user.
+
+    Raises HTTPException 400 if any IDs are invalid or don't belong to the user.
+    """
+    if class_ids:
+        stmt = select(func.count()).select_from(Class).where(
+            Class.id.in_(class_ids), Class.user_id == user_id
+        )
+        result = await db.execute(stmt)
+        count = result.scalar() or 0
+        if count != len(class_ids):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="One or more class IDs are invalid or do not belong to you.",
+            )
+
+    if assignment_ids:
+        stmt = select(func.count()).select_from(Assignment).where(
+            Assignment.id.in_(assignment_ids), Assignment.user_id == user_id
+        )
+        result = await db.execute(stmt)
+        count = result.scalar() or 0
+        if count != len(assignment_ids):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="One or more assignment IDs are invalid or do not belong to you.",
+            )
+
+    if pdf_ids:
+        stmt = select(func.count()).select_from(PDF).where(
+            PDF.id.in_(pdf_ids), PDF.user_id == user_id
+        )
+        result = await db.execute(stmt)
+        count = result.scalar() or 0
+        if count != len(pdf_ids):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="One or more PDF IDs are invalid or do not belong to you.",
+            )
+
+    if note_ids:
+        stmt = select(func.count()).select_from(Note).where(
+            Note.id.in_(note_ids), Note.user_id == user_id
+        )
+        result = await db.execute(stmt)
+        count = result.scalar() or 0
+        if count != len(note_ids):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="One or more note IDs are invalid or do not belong to you.",
+            )
 
 
 # =============================================================================
@@ -40,6 +164,16 @@ async def create_conversation(
     Specify context (classes, assignments, PDFs) that will be included
     in the LLM context for this conversation.
     """
+    # Validate all context IDs belong to the current user
+    await _validate_context_ids(
+        db,
+        user.id,
+        class_ids=request.context_class_ids or None,
+        assignment_ids=request.context_assignment_ids or None,
+        pdf_ids=request.context_pdf_ids or None,
+        note_ids=request.context_note_ids or None,
+    )
+
     conversation = ChatConversation(
         user_id=user.id,
         title=request.title or "New Conversation",
@@ -125,6 +259,16 @@ async def update_conversation_context(
     """Update conversation context (classes, assignments, PDFs in scope)."""
     conversation = await get_user_resource_or_404(
         db, ChatConversation, conversation_id, user.id
+    )
+
+    # Validate all context IDs belong to the current user
+    await _validate_context_ids(
+        db,
+        user.id,
+        class_ids=request.context_class_ids,
+        assignment_ids=request.context_assignment_ids,
+        pdf_ids=request.context_pdf_ids,
+        note_ids=request.context_note_ids,
     )
 
     # Update fields that are provided
@@ -250,39 +394,25 @@ async def stream_chat_message(
                 {"role": "assistant", "content": full_response},
             ]
 
-            # Check if we should update brains
+            # Check if we should update brains (fire as background task)
             should_update = await brain_manager.detect_pattern_update(updated_history)
 
             if should_update:
-                # Update class brains
-                for class_id in conversation.context_class_ids:
-                    try:
-                        brain = await brain_manager.get_or_create_brain(db, user.id, class_id)
-                        await brain_manager.update_brain_after_conversation(
-                            db=db,
-                            brain=brain,
-                            conversation_history=updated_history,
-                            conversation_id=conversation.id,
-                        )
-                    except Exception as e:
-                        print(f"Failed to update class brain {class_id}: {str(e)}")
-
-                # Update global brain
-                try:
-                    global_brain = await brain_manager.get_or_create_brain(db, user.id, None)
-                    await brain_manager.update_brain_after_conversation(
-                        db=db,
-                        brain=global_brain,
-                        conversation_history=updated_history,
+                asyncio.create_task(
+                    _update_brains_background(
+                        user_id=user.id,
                         conversation_id=conversation.id,
+                        context_class_ids=list(conversation.context_class_ids),
+                        conversation_history=updated_history,
                     )
-                except Exception as e:
-                    print(f"Failed to update global brain: {str(e)}")
+                )
 
             yield {"event": "done", "data": ""}
 
         except Exception as e:
-            yield {"event": "error", "data": str(e)}
+            logger.exception("Error during chat streaming")
+            safe_msg = sanitize_error(e, generic_message="An error occurred during chat.")
+            yield {"event": "error", "data": safe_msg}
 
     return EventSourceResponse(event_generator())
 

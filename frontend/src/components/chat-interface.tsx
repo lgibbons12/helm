@@ -3,8 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Send,
   Loader2,
-  User,
-  Bot,
+  Eye,
   RotateCcw,
   X,
   Plus,
@@ -24,6 +23,7 @@ import {
   type ChatMessage,
   type ConversationUpdateContextRequest,
 } from '@/lib/api'
+import { useAuth } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 import { ContextSelector, type ChatContext } from '@/components/context-selector'
 
@@ -33,11 +33,16 @@ interface ChatInterfaceProps {
 
 export function ChatInterface({ conversationId }: ChatInterfaceProps) {
   const queryClient = useQueryClient()
+  const { user } = useAuth()
+  const userInitials = user?.name
+    ? user.name.split(' ').map((n) => n[0]).join('').toLowerCase().slice(0, 2)
+    : '?'
   const [input, setInput] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
   const [streamingContent, setStreamingContent] = useState('')
   const [localMessages, setLocalMessages] = useState<ChatMessage[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [lastFailedMessage, setLastFailedMessage] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
@@ -66,19 +71,13 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
     e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`
   }
 
-  const sendMessage = useCallback(async () => {
-    const message = input.trim()
+  const sendMessageText = useCallback(async (message: string) => {
     if (!message || isStreaming) return
 
-    setInput('')
     setError(null)
+    setLastFailedMessage(null)
     setIsStreaming(true)
     setStreamingContent('')
-
-    // Reset textarea height
-    if (inputRef.current) {
-      inputRef.current.style.height = 'auto'
-    }
 
     // Add user message optimistically
     const userMsg: ChatMessage = {
@@ -114,11 +113,34 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
       queryClient.invalidateQueries({ queryKey: ['conversations'] })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'failed to send message')
+      setLastFailedMessage(message)
       setStreamingContent('')
     } finally {
       setIsStreaming(false)
     }
-  }, [input, isStreaming, conversationId, queryClient])
+  }, [isStreaming, conversationId, queryClient])
+
+  const sendMessage = useCallback(async () => {
+    const message = input.trim()
+    if (!message || isStreaming) return
+
+    setInput('')
+
+    // Reset textarea height
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto'
+    }
+
+    await sendMessageText(message)
+  }, [input, isStreaming, sendMessageText])
+
+  const retryLastMessage = useCallback(() => {
+    if (!lastFailedMessage) return
+    // Remove the optimistic user message that failed
+    setLocalMessages((prev) => prev.filter((m) => m.content !== lastFailedMessage || m.role !== 'user' || !m.id.startsWith('temp-')))
+    setError(null)
+    sendMessageText(lastFailedMessage)
+  }, [lastFailedMessage, sendMessageText])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -244,7 +266,7 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
         {allMessages.length === 0 && !isStreaming && (
           <div className="flex-1 flex items-center justify-center h-full">
             <div className="text-center space-y-2">
-              <Bot className="w-10 h-10 text-muted-foreground mx-auto" />
+              <Eye className="w-10 h-10 text-muted-foreground/40 mx-auto" />
               <p className="text-sm text-muted-foreground lowercase">
                 ask about your materials, notes, or assignments
               </p>
@@ -253,14 +275,14 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
         )}
 
         {allMessages.map((msg) => (
-          <MessageBubble key={msg.id} message={msg} />
+          <MessageBubble key={msg.id} message={msg} userInitials={userInitials} />
         ))}
 
         {/* Streaming response */}
         {isStreaming && streamingContent && (
           <div className="flex gap-3">
-            <div className="flex-shrink-0 w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center">
-              <Bot className="w-4 h-4 text-primary" />
+            <div className="flex-shrink-0 w-7 h-7 rounded-full bg-foreground text-background flex items-center justify-center">
+              <Eye className="w-4 h-4" />
             </div>
             <div className="flex-1 min-w-0 prose prose-sm prose-invert max-w-none">
               <Markdown>{streamingContent}</Markdown>
@@ -271,8 +293,8 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
         {/* Streaming indicator */}
         {isStreaming && !streamingContent && (
           <div className="flex gap-3">
-            <div className="flex-shrink-0 w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center">
-              <Bot className="w-4 h-4 text-primary" />
+            <div className="flex-shrink-0 w-7 h-7 rounded-full bg-foreground text-background flex items-center justify-center">
+              <Eye className="w-4 h-4" />
             </div>
             <div className="flex items-center gap-1.5 py-2">
               <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: '0ms' }} />
@@ -285,14 +307,27 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
         {/* Error */}
         {error && (
           <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
-            <span className="lowercase">{error}</span>
+            <span className="lowercase flex-1">{error}</span>
+            {lastFailedMessage && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-1 text-xs lowercase"
+                onClick={retryLastMessage}
+                aria-label="retry last message"
+              >
+                <RotateCcw className="w-3 h-3" />
+                retry
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="sm"
               className="h-7 gap-1 text-xs lowercase"
-              onClick={() => setError(null)}
+              onClick={() => { setError(null); setLastFailedMessage(null) }}
+              aria-label="dismiss error"
             >
-              <RotateCcw className="w-3 h-3" />
+              <X className="w-3 h-3" />
               dismiss
             </Button>
           </div>
@@ -319,6 +354,7 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
             onClick={sendMessage}
             disabled={isStreaming || !input.trim()}
             className="h-11 w-11 flex-shrink-0"
+            aria-label="send message"
           >
             {isStreaming ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -398,6 +434,7 @@ function ContextBar({
             <button
               onClick={() => onRemove(chip.type, chip.id)}
               className="hover:text-destructive transition-colors"
+              aria-label={`remove ${chip.label} from context`}
             >
               <X className="w-2.5 h-2.5" />
             </button>
@@ -407,6 +444,7 @@ function ContextBar({
         <button
           onClick={onAddClick}
           className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full hover:bg-muted/30 text-[10px] text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+          aria-label="add context item"
         >
           <Plus className="w-3 h-3" />
           add
@@ -415,8 +453,8 @@ function ContextBar({
 
       {/* Context selector popover */}
       {showPopover && (
-        <div className="absolute top-full left-0 right-0 z-50 mt-1 mx-4">
-          <div className="glass-strong rounded-lg p-3 shadow-lg border border-border/30 max-h-[300px] overflow-y-auto">
+        <div className="absolute top-full left-0 right-0 z-50 mt-1 mx-2 sm:mx-4 max-w-[calc(100vw-1rem)] sm:max-w-none">
+          <div className="glass-strong rounded-lg p-3 shadow-lg border border-border/30 max-h-[min(300px,50vh)] overflow-y-auto">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-medium text-muted-foreground lowercase">
                 add to context
@@ -424,6 +462,7 @@ function ContextBar({
               <button
                 onClick={onClosePopover}
                 className="text-muted-foreground hover:text-foreground"
+                aria-label="close context selector"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -452,22 +491,22 @@ function ContextBar({
 // Message Bubble
 // =============================================================================
 
-function MessageBubble({ message }: { message: ChatMessage }) {
+function MessageBubble({ message, userInitials }: { message: ChatMessage; userInitials: string }) {
   const isUser = message.role === 'user'
 
   return (
     <div className={`flex gap-3 ${isUser ? 'flex-row-reverse' : ''}`}>
-      <div
-        className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center ${
-          isUser ? 'bg-accent' : 'bg-primary/10'
-        }`}
-      >
-        {isUser ? (
-          <User className="w-4 h-4 text-accent-foreground" />
-        ) : (
-          <Bot className="w-4 h-4 text-primary" />
-        )}
-      </div>
+      {isUser ? (
+        <div className="flex-shrink-0 w-7 h-7 rounded-full bg-accent flex items-center justify-center">
+          <span className="text-[10px] font-semibold text-accent-foreground leading-none">
+            {userInitials}
+          </span>
+        </div>
+      ) : (
+        <div className="flex-shrink-0 w-7 h-7 rounded-full bg-foreground text-background flex items-center justify-center">
+          <Eye className="w-4 h-4" />
+        </div>
+      )}
       <div
         className={`flex-1 min-w-0 ${
           isUser ? 'text-right' : ''

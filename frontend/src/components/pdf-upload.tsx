@@ -393,6 +393,7 @@ function PDFStatusRow({
             onClick={onRetry}
             disabled={isRetrying}
             title="retry extraction"
+            aria-label={`retry extraction for ${pdf.filename}`}
           >
             <RefreshCw className={`w-3 h-3 ${isRetrying ? 'animate-spin' : ''}`} />
           </Button>
@@ -403,6 +404,7 @@ function PDFStatusRow({
           className="h-6 w-6 text-muted-foreground hover:text-destructive"
           onClick={onDelete}
           title="delete pdf"
+          aria-label={`delete ${pdf.filename}`}
         >
           <Trash2 className="w-3 h-3" />
         </Button>
@@ -452,6 +454,7 @@ export function PDFListItem({ pdf, onDelete, onClick }: PDFListItemProps) {
             e.stopPropagation()
             onDelete(pdf.id)
           }}
+          aria-label={`delete ${pdf.filename}`}
         >
           <X className="w-3.5 h-3.5" />
         </Button>

@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronDown, ChevronRight, GraduationCap, BookOpen, FileText, StickyNote } from 'lucide-react'
+import { ChevronDown, ChevronRight, GraduationCap, BookOpen, FileText, StickyNote, Loader2 } from 'lucide-react'
 
-import { classesApi, assignmentsApi, pdfApi, notesApi, type Class, type Assignment, type PDF } from '@/lib/api'
+import { classesApi, assignmentsApi, pdfApi, notesApi } from '@/lib/api'
 
 export interface ChatContext {
   classIds: string[]
@@ -27,26 +27,28 @@ export function ContextSelector({ onContextChange, initialContext }: ContextSele
   const [pdfsOpen, setPdfsOpen] = useState(false)
   const [notesOpen, setNotesOpen] = useState(false)
 
-  const { data: classes = [] } = useQuery({
+  const { data: classes = [], isLoading: classesLoading } = useQuery({
     queryKey: ['classes'],
     queryFn: () => classesApi.list(),
   })
 
-  const { data: assignments = [] } = useQuery({
+  const { data: assignments = [], isLoading: assignmentsLoading } = useQuery({
     queryKey: ['assignments'],
     queryFn: () => assignmentsApi.list(),
   })
 
-  const { data: pdfsData } = useQuery({
+  const { data: pdfsData, isLoading: pdfsLoading } = useQuery({
     queryKey: ['pdfs'],
     queryFn: () => pdfApi.list(),
   })
   const pdfs = pdfsData?.pdfs || []
 
-  const { data: notes = [] } = useQuery({
+  const { data: notes = [], isLoading: notesLoading } = useQuery({
     queryKey: ['notes'],
     queryFn: () => notesApi.list(),
   })
+
+  const isLoading = classesLoading || assignmentsLoading || pdfsLoading || notesLoading
 
   // Notify parent of changes
   useEffect(() => {
@@ -71,6 +73,15 @@ export function ContextSelector({ onContextChange, initialContext }: ContextSele
   }
 
   const totalSelected = selectedClasses.length + selectedAssignments.length + selectedPdfs.length + selectedNotes.length
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center gap-2 py-4">
+        <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" />
+        <span className="text-xs text-muted-foreground lowercase">loading context...</span>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-1">

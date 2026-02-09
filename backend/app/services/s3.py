@@ -52,7 +52,7 @@ class S3Service:
                 Fields={"Content-Type": content_type},
                 Conditions=[
                     {"Content-Type": content_type},
-                    ["content-length-range", 1, 10485760],  # 1 byte to 10MB
+                    ["content-length-range", 1, settings.max_pdf_size_bytes],
                 ],
                 ExpiresIn=expiration,
             )

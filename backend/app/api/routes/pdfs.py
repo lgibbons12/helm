@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select, func
 
 from app.api.deps import CurrentUser, DbSession, get_user_resource_or_404
+from app.config import sanitize_error
 from app.db.models import PDF
 
 logger = logging.getLogger(__name__)
@@ -105,6 +106,17 @@ async def process_pdf(
         # Update file size
         pdf.file_size_bytes = len(pdf_bytes)
 
+        # Validate the file is actually a valid PDF
+        is_valid = await pdf_processor.validate_pdf(pdf_bytes)
+        if not is_valid:
+            logger.error("File is not a valid PDF: %s", pdf.filename)
+            pdf.extraction_status = "failed"
+            await db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="The uploaded file is not a valid PDF.",
+            )
+
         # Extract text
         logger.info("Extracting text from PDF: %s", pdf.filename)
         result = await pdf_processor.extract_text(pdf_bytes)
@@ -117,7 +129,7 @@ async def process_pdf(
             await db.commit()
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Text extraction failed: {error_msg}",
+                detail=f"Text extraction failed: {sanitize_error(Exception(error_msg), generic_message='Text extraction failed.')}",
             )
 
         # Update PDF record
@@ -152,7 +164,7 @@ async def process_pdf(
 
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to process PDF: {str(e)}",
+            detail=sanitize_error(e, generic_message="Failed to process PDF."),
         )
 
 
@@ -224,19 +236,25 @@ async def delete_pdf(
     """
     Delete PDF from both S3 and database.
 
+    Deletes from S3 first, then from the database. If S3 deletion fails,
+    the database record is preserved to avoid orphaning S3 files.
+
     Returns 204 No Content on success.
     """
     # Get PDF record (with ownership check)
     pdf = await get_user_resource_or_404(db, PDF, pdf_id, user.id)
 
+    # Delete from S3 first to avoid orphaning files
     try:
-        # Delete from S3
         await s3_service.delete_pdf(pdf.s3_key)
     except Exception as e:
-        # Log error but continue - we still want to delete the DB record
-        print(f"Failed to delete from S3: {str(e)}")
+        logger.error("Failed to delete from S3 (key=%s): %s", pdf.s3_key, str(e), exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=sanitize_error(e, generic_message="Failed to delete PDF file from storage."),
+        )
 
-    # Delete from database
+    # Only delete from database after successful S3 deletion
     await db.delete(pdf)
     await db.commit()
 
