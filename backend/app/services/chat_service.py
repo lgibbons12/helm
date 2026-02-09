@@ -19,7 +19,7 @@ settings = get_settings()
 
 def _load_soul() -> str:
     """Load the SOUL.md persona file for the system prompt."""
-    soul_path = Path(__file__).parent.parent / "SOUL.md"
+    soul_path = Path(__file__).parent.parent.parent / "SOUL.md"
     try:
         return soul_path.read_text(encoding="utf-8")
     except FileNotFoundError:
