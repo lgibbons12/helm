@@ -514,6 +514,9 @@ class BudgetSettings(Base):
     weekly_budget_target: Mapped[Optional[float]] = mapped_column(
         Numeric(10, 2), nullable=True
     )
+    starting_balance: Mapped[Optional[float]] = mapped_column(
+        Numeric(12, 2), nullable=True, default=0.00
+    )
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=text("NOW()"), nullable=False
     )

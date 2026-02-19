@@ -15,6 +15,7 @@ class BudgetSettingsRead(BaseSchema):
     user_id: UUID
     large_expense_threshold: Decimal | None = Field(None, ge=0)
     weekly_budget_target: Decimal | None = Field(None, ge=0)
+    starting_balance: Decimal | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -24,3 +25,4 @@ class BudgetSettingsUpdate(BaseSchema):
 
     large_expense_threshold: Decimal | None = Field(None, ge=0)
     weekly_budget_target: Decimal | None = Field(None, ge=0)
+    starting_balance: Decimal | None = None

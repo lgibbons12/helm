@@ -403,6 +403,94 @@ export interface WeeklyAverage {
   total_expenses: number
 }
 
+// =============================================================================
+// Budget Settings Types
+// =============================================================================
+
+export interface BudgetSettings {
+  user_id: string
+  large_expense_threshold: number | null
+  weekly_budget_target: number | null
+  starting_balance: number | null
+  created_at: string
+  updated_at: string
+}
+
+export interface BudgetSettingsUpdate {
+  large_expense_threshold?: number | null
+  weekly_budget_target?: number | null
+  starting_balance?: number | null
+}
+
+// =============================================================================
+// Week-by-Week Types
+// =============================================================================
+
+export const EXPENSE_CATEGORIES = [
+  'food', 'transport', 'entertainment', 'shopping',
+  'utilities', 'health', 'education', 'other',
+] as const
+
+export type ExpenseCategory = typeof EXPENSE_CATEGORIES[number]
+
+export interface CategoryAmount {
+  category: string
+  amount: number
+}
+
+export interface WeekSummary {
+  week_start: string
+  week_end: string
+  weekly_spend: number
+  extraneous_spend: number
+  total_spend: number
+  budget_target: number | null
+  budget_remaining: number | null
+  transactions: Transaction[]
+  category_breakdown: CategoryAmount[]
+}
+
+export interface MultiWeekEntry {
+  week_start: string
+  weekly_spend: number
+  extraneous_spend: number
+  total_spend: number
+}
+
+export interface IncomeSourceAmount {
+  source: string
+  amount: number
+}
+
+export interface MonthlyIncome {
+  month: string
+  amount: number
+}
+
+export interface IncomeSummary {
+  total_income: number
+  by_source: IncomeSourceAmount[]
+  recent: Transaction[]
+  monthly_trend: MonthlyIncome[]
+}
+
+export interface BalanceSummary {
+  starting_balance: number
+  total_income: number
+  total_expenses: number
+  current_balance: number
+}
+
+export interface TransactionUpdate {
+  date?: string
+  amount_signed?: number
+  merchant?: string
+  category?: string
+  note?: string
+  is_weekly?: boolean
+  income_source?: string
+}
+
 export const transactionsApi = {
   list: (params?: {
     date_from?: string
@@ -415,6 +503,9 @@ export const transactionsApi = {
     api.post<Transaction>('/transactions', data),
 
   get: (id: string) => api.get<Transaction>(`/transactions/${id}`),
+
+  update: (id: string, data: TransactionUpdate) =>
+    api.put<Transaction>(`/transactions/${id}`, data),
 
   delete: (id: string) => api.delete(`/transactions/${id}`),
 
@@ -429,6 +520,24 @@ export const transactionsApi = {
 
   getWeeklyAverage: () =>
     api.get<WeeklyAverage>('/transactions/stats/weekly-average'),
+
+  getWeekSummary: (weekStart?: string) =>
+    api.get<WeekSummary>(`/transactions/stats/week-summary${weekStart ? `?week_start=${weekStart}` : ''}`),
+
+  getMultiWeek: (weeks?: number) =>
+    api.get<MultiWeekEntry[]>(`/transactions/stats/multi-week${weeks ? `?weeks=${weeks}` : ''}`),
+
+  getIncomeSummary: () =>
+    api.get<IncomeSummary>('/transactions/stats/income-summary'),
+
+  getBalance: () =>
+    api.get<BalanceSummary>('/transactions/stats/balance'),
+}
+
+export const budgetSettingsApi = {
+  get: () => api.get<BudgetSettings>('/budget/settings'),
+  update: (data: BudgetSettingsUpdate) =>
+    api.patch<BudgetSettings>('/budget/settings', data),
 }
 
 // =============================================================================
