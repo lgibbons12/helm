@@ -40,25 +40,25 @@ export const Route = createFileRoute('/dashboard/plan')({
 const DEFAULT_CONTENT = `# weekly plan
 
 ## goals
-- 
+-
 
 ## monday
-- 
+-
 
 ## tuesday
-- 
+-
 
 ## wednesday
-- 
+-
 
 ## thursday
-- 
+-
 
 ## friday
-- 
+-
 
 ## weekend
-- 
+-
 
 ## notes
 `
@@ -66,46 +66,31 @@ const DEFAULT_CONTENT = `# weekly plan
 const SAVE_DEBOUNCE_MS = 1000
 
 // =============================================================================
-// Helpers
-// =============================================================================
-
-/** Return the Monday of the current week as YYYY-MM-DD. */
-function getCurrentWeekMonday(): string {
-  const today = new Date()
-  const day = today.getDay() // 0=Sun, 1=Mon, ...
-  const diff = day === 0 ? -6 : 1 - day // adjust to Monday
-  const monday = new Date(today)
-  monday.setDate(today.getDate() + diff)
-  return monday.toISOString().split('T')[0]
-}
-
-// =============================================================================
 // Main Component
 // =============================================================================
 
 function WeeklyPlanPage() {
   const queryClient = useQueryClient()
-  const weekStart = getCurrentWeekMonday()
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const editorReadyRef = useRef(false)
 
-  // Fetch the current week's plan
+  // Fetch the user's plan
   const {
     data: plan,
     isLoading,
     isError,
   } = useQuery({
-    queryKey: ['weekly-plan', weekStart],
-    queryFn: () => weeklyPlanApi.get(weekStart),
+    queryKey: ['weekly-plan'],
+    queryFn: () => weeklyPlanApi.get(),
   })
 
   // Upsert mutation
   const upsertMutation = useMutation({
     mutationFn: weeklyPlanApi.upsert,
     onSuccess: (data) => {
-      queryClient.setQueryData(['weekly-plan', weekStart], data)
+      queryClient.setQueryData(['weekly-plan'], data)
       setLastSaved(new Date())
       setIsSaving(false)
     },
@@ -122,10 +107,10 @@ function WeeklyPlanPage() {
       }
       setIsSaving(true)
       debounceRef.current = setTimeout(() => {
-        upsertMutation.mutate({ week_start: weekStart, content })
+        upsertMutation.mutate({ content })
       }, SAVE_DEBOUNCE_MS)
     },
-    [weekStart, upsertMutation]
+    [upsertMutation]
   )
 
   // Cleanup debounce on unmount

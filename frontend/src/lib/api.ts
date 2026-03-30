@@ -221,14 +221,12 @@ export interface NoteListParams {
 export interface WeeklyPlan {
   id: string
   user_id: string
-  week_start: string  // YYYY-MM-DD (Monday of the week)
   content: string | null
   created_at: string
   updated_at: string
 }
 
 export interface WeeklyPlanUpsert {
-  week_start: string
   content: string | null
 }
 
@@ -638,10 +636,7 @@ export interface BrainResponse {
 }
 
 export const weeklyPlanApi = {
-  get: (weekStart?: string) =>
-    api.get<WeeklyPlan | null>(
-      `/weekly-plan${weekStart ? `?week_start=${weekStart}` : ''}`
-    ),
+  get: () => api.get<WeeklyPlan | null>('/weekly-plan'),
 
   upsert: (data: WeeklyPlanUpsert) =>
     api.put<WeeklyPlan>('/weekly-plan', data),

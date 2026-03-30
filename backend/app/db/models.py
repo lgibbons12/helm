@@ -530,16 +530,15 @@ class BudgetSettings(Base):
 
 class WeeklyPlan(Base):
     """
-    Weekly plan document (one per user per week).
+    Single plan document per user (like a special note).
 
-    Keyed by week_start (the Monday of each week).
     Content is stored as markdown for the TipTap editor.
+    Syncs across all devices via the API.
     """
 
     __tablename__ = "weekly_plans"
     __table_args__ = (
-        UniqueConstraint("user_id", "week_start", name="unique_user_week_plan"),
-        Index("idx_weekly_plans_user_week", "user_id", "week_start"),
+        UniqueConstraint("user_id", name="unique_user_plan"),
     )
 
     id: Mapped[UUID] = mapped_column(
@@ -548,7 +547,6 @@ class WeeklyPlan(Base):
     user_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
-    week_start: Mapped[date] = mapped_column(nullable=False)  # Monday of the week
     content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Markdown
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=text("NOW()"), nullable=False

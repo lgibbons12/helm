@@ -1,7 +1,5 @@
 """Weekly plan CRUD routes."""
 
-from datetime import date, timedelta
-
 from fastapi import APIRouter, status
 from sqlalchemy import select
 
@@ -12,31 +10,14 @@ from app.schemas.weekly_plans import WeeklyPlanRead, WeeklyPlanUpsert
 router = APIRouter(prefix="/weekly-plan", tags=["weekly-plan"])
 
 
-def _current_week_monday() -> date:
-    """Return the Monday of the current week."""
-    today = date.today()
-    return today - timedelta(days=today.weekday())
-
-
 @router.get("/", response_model=WeeklyPlanRead | None)
 async def get_weekly_plan(
     current_user: CurrentUser,
     db: DbSession,
-    week_start: date | None = None,
 ) -> WeeklyPlanRead | None:
-    """
-    Get the weekly plan for a specific week.
-
-    If week_start is not provided, defaults to the current week (Monday).
-    Returns null if no plan exists for that week yet.
-    """
-    target_week = week_start or _current_week_monday()
-
+    """Get the user's plan. Returns null if no plan exists yet."""
     result = await db.execute(
-        select(WeeklyPlan).where(
-            WeeklyPlan.user_id == current_user.id,
-            WeeklyPlan.week_start == target_week,
-        )
+        select(WeeklyPlan).where(WeeklyPlan.user_id == current_user.id)
     )
     plan = result.scalar_one_or_none()
     if plan is None:
@@ -50,17 +31,9 @@ async def upsert_weekly_plan(
     current_user: CurrentUser,
     db: DbSession,
 ) -> WeeklyPlanRead:
-    """
-    Create or update a weekly plan.
-
-    If a plan for the given week_start already exists, its content is updated.
-    Otherwise a new plan is created.
-    """
+    """Create or update the user's plan."""
     result = await db.execute(
-        select(WeeklyPlan).where(
-            WeeklyPlan.user_id == current_user.id,
-            WeeklyPlan.week_start == data.week_start,
-        )
+        select(WeeklyPlan).where(WeeklyPlan.user_id == current_user.id)
     )
     plan = result.scalar_one_or_none()
 
@@ -69,7 +42,6 @@ async def upsert_weekly_plan(
     else:
         plan = WeeklyPlan(
             user_id=current_user.id,
-            week_start=data.week_start,
             content=data.content,
         )
         db.add(plan)
