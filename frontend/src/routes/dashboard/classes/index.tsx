@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Plus, ExternalLink, User, BookOpen, FileText } from 'lucide-react'
 
 import { classesApi, type Class } from '../../../lib/api'
+import { compareSemestersDesc } from '@/lib/semester'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -74,8 +75,8 @@ function ClassesGrid({ classes }: { classes: Class[] }) {
     {} as Record<string, Class[]>
   )
 
-  // Sort semesters (most recent first)
-  const semesters = Object.keys(bySemester).sort((a, b) => b.localeCompare(a))
+  // Sort semesters chronologically (most recent first)
+  const semesters = Object.keys(bySemester).sort(compareSemestersDesc)
 
   return (
     <div className="space-y-8">

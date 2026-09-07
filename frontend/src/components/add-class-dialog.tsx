@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { generateSemesters } from '@/lib/semester'
 import {
   Select,
   SelectContent,
@@ -46,21 +47,6 @@ const LINK_TYPES = [
   'website',
   'other',
 ]
-
-// Generate semesters: current year ± 1 year
-function generateSemesters(): string[] {
-  const currentYear = new Date().getFullYear()
-  const semesters: string[] = []
-  
-  for (let year = currentYear + 1; year >= currentYear - 1; year--) {
-    semesters.push(`spring ${year}`)
-    semesters.push(`fall ${year}`)
-    semesters.push(`summer ${year}`)
-    semesters.push(`winter ${year}`)
-  }
-  
-  return semesters
-}
 
 const SEMESTERS = generateSemesters()
 
