@@ -37,8 +37,12 @@ class QuizScope(BaseSchema):
     note_limit: int | None = Field(default=None, ge=1, le=50)
     # Only consider notes updated within this many days.
     since_days: int | None = Field(default=None, ge=1, le=365)
+    # Pull in notes with no class. Off by default: standalone notes are where
+    # to-do lists and scratch live, and they are the ones you edit most, so
+    # recency alone floats them straight to the top of a review.
+    include_standalone: bool = False
     # Explicit selection. Set by the setup screen after you deselect a note that
-    # recency pulled in by mistake; overrides note_limit and since_days.
+    # recency pulled in by mistake; overrides every filter above.
     note_ids: list[UUID] | None = None
 
 

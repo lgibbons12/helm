@@ -34,6 +34,7 @@ export function QuizSetup({ onStart, isStarting, startError }: QuizSetupProps) {
   const [classId, setClassId] = useState<string | null>(null)
   const [rangeIndex, setRangeIndex] = useState(1)
   const [questionCount, setQuestionCount] = useState(10)
+  const [includeStandalone, setIncludeStandalone] = useState(false)
   const [excluded, setExcluded] = useState<Set<string>>(new Set())
 
   const { data: classes = [] } = useQuery({
@@ -48,8 +49,9 @@ export function QuizSetup({ onStart, isStarting, startError }: QuizSetupProps) {
       class_ids: classId ? [classId] : [],
       note_limit: 'note_limit' in range ? range.note_limit : null,
       since_days: 'since_days' in range ? range.since_days : null,
+      include_standalone: includeStandalone,
     }),
-    [classId, range],
+    [classId, range, includeStandalone],
   )
 
   const { data: preview, isFetching } = useQuery({
@@ -171,6 +173,18 @@ export function QuizSetup({ onStart, isStarting, startError }: QuizSetupProps) {
               recency comes from when you last edited a note, so tidying up an
               old one can pull it in. uncheck anything that doesn&apos;t belong.
             </p>
+            <label className="flex items-center gap-2 text-xs text-muted-foreground lowercase cursor-pointer">
+              <input
+                type="checkbox"
+                checked={includeStandalone}
+                onChange={(e) => {
+                  setIncludeStandalone(e.target.checked)
+                  setExcluded(new Set())
+                }}
+                className="rounded border-border"
+              />
+              include notes with no class (to-do lists and scratch live here)
+            </label>
             <div className="space-y-1">
               {preview.notes.map((note) => {
                 const isIn = !excluded.has(note.id)

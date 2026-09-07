@@ -121,6 +121,9 @@ class Settings(BaseSettings):
     quiz_max_total_context_chars: int = 60000
     # Refuse to generate rather than produce hollow questions from thin notes.
     quiz_min_source_chars: int = 500
+    # A note shorter than this cannot carry a question worth asking, so it is
+    # skipped when notes are picked by recency rather than by hand.
+    quiz_min_note_chars: int = 200
     quiz_default_question_count: int = 10
     quiz_min_question_count: int = 3
     quiz_max_question_count: int = 25

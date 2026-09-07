@@ -17,7 +17,7 @@ from uuid import UUID
 
 from anthropic import AsyncAnthropic
 from anthropic.types import ToolChoiceToolParam, ToolParam
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from app.config import get_settings
@@ -88,7 +88,8 @@ async def resolve_sources(
     )
 
     if scope.note_ids is not None:
-        # Explicit selection wins over every other filter.
+        # Explicit selection wins over every other filter, including the
+        # quality ones below -- if you picked it, you meant it.
         note_query = note_query.where(Note.id.in_(scope.note_ids))
     else:
         if scope.class_ids:
@@ -96,11 +97,25 @@ async def resolve_sources(
         if scope.since_days is not None:
             cutoff = datetime.now(timezone.utc) - timedelta(days=scope.since_days)
             note_query = note_query.where(Note.updated_at >= cutoff)
-        limit = scope.note_limit or _DEFAULT_NOTE_LIMIT
-        note_query = note_query.limit(limit)
+
+        # Course material is attached to a class. Standalone notes are where
+        # to-do lists and scratch live, and being the notes you touch most
+        # often, pure recency puts them straight at the top.
+        if not scope.include_standalone:
+            note_query = note_query.where(Note.class_id.is_not(None))
+
+        # A two-line note cannot carry a question. Filtered in SQL rather than
+        # after the fact so the limit selects usable notes -- filtering post-LIMIT
+        # would silently return fewer notes than asked for.
+        note_query = note_query.where(
+            func.length(func.trim(func.coalesce(Note.content_text, "")))
+            >= settings.quiz_min_note_chars
+        )
+
+        note_query = note_query.limit(scope.note_limit or _DEFAULT_NOTE_LIMIT)
 
     notes = list((await db.execute(note_query)).scalars())
-    # Only notes with actual content can produce questions.
+    # An explicit selection skips the SQL filters, so still drop empty notes.
     notes = [n for n in notes if (n.content_text or "").strip()]
 
     # Classes come from the notes we landed on, plus anything explicitly scoped.

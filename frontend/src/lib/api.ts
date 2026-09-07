@@ -43,7 +43,7 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     message: string,
-    public data?: unknown
+    public data?: unknown,
   ) {
     super(message)
     this.name = 'ApiError'
@@ -186,7 +186,7 @@ export interface Note {
   class_name: string | null
   assignment_title: string | null
   title: string
-  content_text: string | null  // Markdown content
+  content_text: string | null // Markdown content
   tags: string[]
   created_at: string
   updated_at: string
@@ -234,9 +234,20 @@ export interface WeeklyPlanUpsert {
 // Assignment Types
 // =============================================================================
 
-export type AssignmentStatus = 'not_started' | 'in_progress' | 'almost_done' | 'finished'
+export type AssignmentStatus =
+  | 'not_started'
+  | 'in_progress'
+  | 'almost_done'
+  | 'finished'
 export type AssignmentType = 'pset' | 'reading' | 'project' | 'quiz' | 'other'
-export type DayOfWeek = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday'
+export type DayOfWeek =
+  | 'monday'
+  | 'tuesday'
+  | 'wednesday'
+  | 'thursday'
+  | 'friday'
+  | 'saturday'
+  | 'sunday'
 
 export interface Assignment {
   id: string
@@ -279,7 +290,9 @@ export interface AssignmentUpdate {
 // Helper Functions
 // =============================================================================
 
-function buildQueryString(params?: Record<string, string | boolean | undefined>): string {
+function buildQueryString(
+  params?: Record<string, string | boolean | undefined>,
+): string {
   if (!params) return ''
   const searchParams = new URLSearchParams()
   for (const [key, value] of Object.entries(params)) {
@@ -306,7 +319,9 @@ export const authApi = {
 
 export const classesApi = {
   list: (semester?: string) =>
-    api.get<Class[]>(`/classes${semester ? `?semester=${encodeURIComponent(semester)}` : ''}`),
+    api.get<Class[]>(
+      `/classes${semester ? `?semester=${encodeURIComponent(semester)}` : ''}`,
+    ),
 
   get: (id: string) => api.get<Class>(`/classes/${id}`),
 
@@ -338,7 +353,8 @@ export const assignmentsApi = {
 
   get: (id: string) => api.get<Assignment>(`/assignments/${id}`),
 
-  create: (data: AssignmentCreate) => api.post<Assignment>('/assignments', data),
+  create: (data: AssignmentCreate) =>
+    api.post<Assignment>('/assignments', data),
 
   update: (id: string, data: AssignmentUpdate) =>
     api.patch<Assignment>(`/assignments/${id}`, data),
@@ -425,11 +441,17 @@ export interface BudgetSettingsUpdate {
 // =============================================================================
 
 export const EXPENSE_CATEGORIES = [
-  'food', 'transport', 'entertainment', 'shopping',
-  'utilities', 'health', 'education', 'other',
+  'food',
+  'transport',
+  'entertainment',
+  'shopping',
+  'utilities',
+  'health',
+  'education',
+  'other',
 ] as const
 
-export type ExpenseCategory = typeof EXPENSE_CATEGORIES[number]
+export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number]
 
 export interface CategoryAmount {
   category: string
@@ -508,28 +530,35 @@ export const transactionsApi = {
   delete: (id: string) => api.delete(`/transactions/${id}`),
 
   getSummary: (params?: { date_from?: string; date_to?: string }) =>
-    api.get<TransactionSummary>(`/transactions/summary${buildQueryString(params)}`),
+    api.get<TransactionSummary>(
+      `/transactions/summary${buildQueryString(params)}`,
+    ),
 
   getBreakdown: () =>
     api.get<TransactionBreakdown>('/transactions/stats/breakdown'),
 
   getTrend: (days?: number) =>
-    api.get<TransactionTrendPoint[]>(`/transactions/stats/trend${days ? `?days=${days}` : ''}`),
+    api.get<TransactionTrendPoint[]>(
+      `/transactions/stats/trend${days ? `?days=${days}` : ''}`,
+    ),
 
   getWeeklyAverage: () =>
     api.get<WeeklyAverage>('/transactions/stats/weekly-average'),
 
   getWeekSummary: (weekStart?: string) =>
-    api.get<WeekSummary>(`/transactions/stats/week-summary${weekStart ? `?week_start=${weekStart}` : ''}`),
+    api.get<WeekSummary>(
+      `/transactions/stats/week-summary${weekStart ? `?week_start=${weekStart}` : ''}`,
+    ),
 
   getMultiWeek: (weeks?: number) =>
-    api.get<MultiWeekEntry[]>(`/transactions/stats/multi-week${weeks ? `?weeks=${weeks}` : ''}`),
+    api.get<MultiWeekEntry[]>(
+      `/transactions/stats/multi-week${weeks ? `?weeks=${weeks}` : ''}`,
+    ),
 
   getIncomeSummary: () =>
     api.get<IncomeSummary>('/transactions/stats/income-summary'),
 
-  getBalance: () =>
-    api.get<BalanceSummary>('/transactions/stats/balance'),
+  getBalance: () => api.get<BalanceSummary>('/transactions/stats/balance'),
 }
 
 export const budgetSettingsApi = {
@@ -629,8 +658,7 @@ export interface ConversationUpdateContextRequest {
 export const weeklyPlanApi = {
   get: () => api.get<WeeklyPlan | null>('/weekly-plan'),
 
-  upsert: (data: WeeklyPlanUpsert) =>
-    api.put<WeeklyPlan>('/weekly-plan', data),
+  upsert: (data: WeeklyPlanUpsert) => api.put<WeeklyPlan>('/weekly-plan', data),
 }
 
 // =============================================================================
@@ -673,8 +701,7 @@ export const chatApi = {
   updateContext: (id: string, data: ConversationUpdateContextRequest) =>
     api.patch<Conversation>(`/chat/conversations/${id}`, data),
 
-  deleteConversation: (id: string) =>
-    api.delete(`/chat/conversations/${id}`),
+  deleteConversation: (id: string) => api.delete(`/chat/conversations/${id}`),
 
   /**
    * Stream a chat message response using SSE.
@@ -694,7 +721,7 @@ export const chatApi = {
         credentials: 'include',
         headers,
         body: JSON.stringify({ message }),
-      }
+      },
     )
 
     if (!response.ok) {
@@ -738,10 +765,10 @@ export const chatApi = {
   },
 
   updateBrain: (conversationId: string) =>
-    api.post<{ status: string; brains: Array<{ brain_type: string; class_id: string | null }> }>(
-      `/chat/conversations/${conversationId}/update-brain`
-    ),
-
+    api.post<{
+      status: string
+      brains: Array<{ brain_type: string; class_id: string | null }>
+    }>(`/chat/conversations/${conversationId}/update-brain`),
 }
 
 // =============================================================================
@@ -758,7 +785,9 @@ export interface QuizScope {
   note_limit?: number | null
   /** Only consider notes updated within this many days. */
   since_days?: number | null
-  /** Explicit selection, overriding note_limit and since_days. */
+  /** Include notes with no class. Off by default — that's where scratch lives. */
+  include_standalone?: boolean
+  /** Explicit selection, overriding every filter above. */
   note_ids?: Array<string> | null
 }
 
