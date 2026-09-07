@@ -110,6 +110,22 @@ class Settings(BaseSettings):
     brain_update_message_interval: int = 5
     brain_history_window: int = 10
 
+    # Plato (quizzing) settings
+    # Question generation and grading are harder tasks than chat, so quizzing
+    # gets its own model setting. Falls back to llm_model when left empty.
+    quiz_model: str = "claude-sonnet-5"
+    quiz_generation_max_tokens: int = 8000
+    quiz_grading_max_tokens: int = 1000
+    # Quiz context is assembled notes-first with its own budget, rather than
+    # reusing the chat ordering where large PDFs can crowd notes out entirely.
+    quiz_max_total_context_chars: int = 60000
+    # Refuse to generate rather than produce hollow questions from thin notes.
+    quiz_min_source_chars: int = 500
+    quiz_default_question_count: int = 10
+    quiz_min_question_count: int = 3
+    quiz_max_question_count: int = 25
+    quiz_brain_max_chars: int = 4000
+
     # PDF upload
     max_pdf_size_bytes: int = 50 * 1024 * 1024  # 50MB
 

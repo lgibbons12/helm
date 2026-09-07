@@ -8,7 +8,7 @@ All models use UUID primary keys and proper relationship definitions.
 import datetime as dt
 from datetime import date, datetime
 from enum import Enum as PyEnum
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -89,6 +89,30 @@ class BrainType(str, PyEnum):
 
     GLOBAL = "global"
     CLASS = "class"
+    QUIZ = "quiz"
+
+
+class QuizSessionStatus(str, PyEnum):
+    """Lifecycle state of a Plato quiz session."""
+
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+
+
+class QuizQuestionFormat(str, PyEnum):
+    """Question format within a quiz session."""
+
+    MULTIPLE_CHOICE = "multiple_choice"
+    FREE_RECALL = "free_recall"
+    FLASHCARD = "flashcard"
+
+
+class QuizVerdict(str, PyEnum):
+    """Grading outcome for a single answered question."""
+
+    CORRECT = "correct"
+    PARTIAL = "partial"
+    INCORRECT = "incorrect"
 
 
 class ChatRole(str, PyEnum):
@@ -163,6 +187,9 @@ class User(Base):
     )
     brain_memories: Mapped[list["BrainMemory"]] = relationship(
         "BrainMemory", back_populates="user", cascade="all, delete-orphan"
+    )
+    quiz_sessions: Mapped[list["QuizSession"]] = relationship(
+        "QuizSession", back_populates="user", cascade="all, delete-orphan"
     )
 
 
@@ -748,3 +775,62 @@ class BrainMemory(Base):
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="brain_memories")
     class_: Mapped[Optional["Class"]] = relationship("Class", back_populates="brain_memories")
+
+
+class QuizSession(Base):
+    """
+    A single Plato quiz session.
+
+    Questions are generated fresh for every session and held server-side, so
+    model answers never reach the browser and a refresh cannot lose progress.
+
+    This is working state, not an analytics record. The durable memory of how
+    you performed lives in the per-class quiz BrainMemory, which is rewritten
+    when a session completes.
+    """
+
+    __tablename__ = "quiz_sessions"
+    __table_args__ = (
+        Index("idx_quiz_sessions_user_created", "user_id", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+
+    # Classes in scope. Stored as an array rather than a FK because a session
+    # can span several classes (the cross-class review at the top of the page).
+    class_ids: Mapped[list[UUID]] = mapped_column(
+        ARRAY(PGUUID(as_uuid=True)), nullable=False, server_default="{}"
+    )
+    # Notes the questions were generated from, for display on the results screen.
+    source_note_ids: Mapped[list[UUID]] = mapped_column(
+        ARRAY(PGUUID(as_uuid=True)), nullable=False, server_default="{}"
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(), nullable=False, server_default="in_progress"
+    )  # 'in_progress' or 'completed'
+
+    # Generated questions, including correct answers. Never sent to the client
+    # in full -- routes strip the answer fields before serializing.
+    questions: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
+    # One entry per answered question: the response given and how it was graded.
+    responses: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=text("NOW()"), nullable=False
+    )
+    completed_at: Mapped[Optional[datetime]] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=True
+    )
+
+    # Relationships
+    user: Mapped["User"] = relationship("User", back_populates="quiz_sessions")

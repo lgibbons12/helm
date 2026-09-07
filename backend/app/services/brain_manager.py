@@ -16,6 +16,15 @@ settings = get_settings()
 # Transient error types that warrant retrying
 _RETRYABLE_ERRORS = (APIConnectionError, RateLimitError)
 
+# Starting shape for a Plato quiz brain. The update prompt holds rewrites to
+# these three sections so the record stays predictable to read and to inject.
+QUIZ_BRAIN_TEMPLATE = """## strong concepts
+
+## weak concepts
+
+## recent sessions
+"""
+
 
 async def _retry_anthropic(coro_factory, *, max_attempts: int = 3, base_delay: float = 1.0):
     """
@@ -74,6 +83,7 @@ class BrainManager:
         db: AsyncSession,
         user_id: UUID,
         class_id: UUID | None = None,
+        brain_type: str | None = None,
     ) -> BrainMemory:
         """
         Get existing brain or create new one.
@@ -82,12 +92,18 @@ class BrainManager:
             db: Database session
             user_id: User ID
             class_id: Optional class ID (None for global brain)
+            brain_type: Explicit brain type. When omitted, inferred from class_id
+                as 'global' or 'class' -- the original behaviour. Pass 'quiz' to
+                address the Plato mastery brain, which is scoped to a class and
+                stored alongside the conversational one.
 
         Returns:
             BrainMemory instance
         """
-        # Determine brain type
-        brain_type = "global" if class_id is None else "class"
+        if brain_type is None:
+            brain_type = "global" if class_id is None else "class"
+        elif brain_type == "quiz" and class_id is None:
+            raise ValueError("A quiz brain must be scoped to a class")
 
         # Try to fetch existing brain
         stmt = select(BrainMemory).where(
@@ -178,6 +194,86 @@ If there's no new information worth remembering, return the current content unch
         except Exception as e:
             # Log error but don't fail - brain updates are not critical
             logger.exception("Brain update failed for brain_id=%s", brain.id)
+            return brain.content
+
+    async def update_quiz_brain(
+        self,
+        db: AsyncSession,
+        brain: BrainMemory,
+        session_summary: str,
+    ) -> str:
+        """
+        Fold a completed quiz session into the class quiz brain.
+
+        Unlike the conversational brain, this rewrite is constrained: the model
+        must return exactly the three sections below, within a character budget,
+        dropping the oldest session lines first. The conversational update prompt
+        hands over the whole brain and asks for the whole thing back, which lets
+        content quietly disappear; the fixed shape here bounds that.
+
+        Args:
+            db: Database session
+            brain: The quiz BrainMemory to rewrite
+            session_summary: Markdown summary of the session just completed
+
+        Returns:
+            Updated brain content (or the unchanged content if the call failed)
+        """
+        current_content = brain.content or QUIZ_BRAIN_TEMPLATE
+        max_chars = settings.quiz_brain_max_chars
+
+        system_prompt = f"""You maintain a student's mastery record for one class.
+
+Rewrite the record below to incorporate the results of the quiz session the user
+will give you. Return ONLY the updated record as Markdown.
+
+Rules:
+- Use exactly these three headings, in this order, and no others:
+  ## strong concepts
+  ## weak concepts
+  ## recent sessions
+- Under the first two, keep short bullet points naming concepts. Move a concept
+  between them when the new results justify it; do not list a concept twice.
+- Under "recent sessions", keep one dated bullet per session, newest first.
+- The whole record must stay under {max_chars} characters. When it would exceed
+  that, drop the oldest bullets under "recent sessions" first, then merge
+  near-duplicate concept bullets. Never drop a weak concept to save space.
+- Write in lowercase, matching the existing record.
+
+Current record:
+{current_content}"""
+
+        try:
+            message = await _retry_anthropic(
+                lambda: self.client.messages.create(
+                    model=settings.quiz_model or settings.llm_model,
+                    max_tokens=settings.llm_brain_max_tokens,
+                    system=system_prompt,
+                    messages=[{"role": "user", "content": session_summary}],
+                )
+            )
+
+            updated_content = message.content[0].text.strip()
+
+            # Belt and braces: the prompt asks for a budget, this enforces it.
+            if len(updated_content) > max_chars:
+                updated_content = updated_content[:max_chars].rstrip()
+                logger.warning(
+                    "Quiz brain %s exceeded %d chars and was truncated",
+                    brain.id, max_chars,
+                )
+
+            brain.content = updated_content
+            brain.update_count += 1
+
+            await db.commit()
+            await db.refresh(brain)
+
+            return updated_content
+
+        except Exception:
+            # Never fail a finished session because the memory write failed.
+            logger.exception("Quiz brain update failed for brain_id=%s", brain.id)
             return brain.content
 
     async def detect_pattern_update(

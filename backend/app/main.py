@@ -14,6 +14,7 @@ from app.config import get_settings
 from app.api.routes import (
     auth,
     assignments,
+    brains,
     budget,
     chat,
     classes,
@@ -64,6 +65,7 @@ app.include_router(budget.router)
 app.include_router(weekly_plans.router)
 app.include_router(pdfs.router)
 app.include_router(chat.router)
+app.include_router(brains.router)
 
 
 @app.get("/health")
