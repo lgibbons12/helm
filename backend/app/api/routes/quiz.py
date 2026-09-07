@@ -23,6 +23,8 @@ from app.schemas.quiz import (
     QuizScope,
     QuizSessionCreate,
     QuizSessionRead,
+    QuizReveal,
+    QuizRevealRequest,
     QuizSessionSummary,
     QuizSourcePreview,
     stored_questions,
@@ -262,6 +264,40 @@ async def submit_answer(
 
     await db.commit()
     return result
+
+
+@router.post("/sessions/{session_id}/reveal", response_model=QuizReveal)
+async def reveal_answer(
+    session_id: UUID,
+    payload: QuizRevealRequest,
+    db: DbSession,
+    user: CurrentUser,
+) -> QuizReveal:
+    """
+    Show the back of a flashcard.
+
+    Flashcards are self-graded, which means you have to see the answer before
+    you can mark yourself. Restricted to that format on purpose: for multiple
+    choice and free recall, being able to ask for the answer first would defeat
+    the point of holding answers server-side at all.
+    """
+    session = await get_user_resource_or_404(db, QuizSession, session_id, user.id)
+
+    questions = {q.id: q for q in stored_questions(session.questions)}
+    question = questions.get(payload.question_id)
+    if question is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="no such question in this session",
+        )
+
+    if question.format != "flashcard":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="only flashcards can be revealed before answering",
+        )
+
+    return QuizReveal(question_id=question.id, model_answer=question.model_answer)
 
 
 @router.post("/sessions/{session_id}/complete", response_model=QuizSessionSummary)

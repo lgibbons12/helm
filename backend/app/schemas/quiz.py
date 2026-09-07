@@ -145,6 +145,19 @@ class QuizAnswerSubmit(BaseSchema):
         return self
 
 
+class QuizRevealRequest(BaseSchema):
+    """Ask for the back of a flashcard."""
+
+    question_id: str
+
+
+class QuizReveal(BaseSchema):
+    """The back of a flashcard, shown so you can mark yourself."""
+
+    question_id: str
+    model_answer: str
+
+
 class QuizAnswerResult(BaseSchema):
     """How one answer was graded."""
 

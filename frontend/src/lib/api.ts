@@ -758,3 +758,156 @@ export const chatApi = {
 
   listBrains: () => api.get<BrainResponse[]>('/chat/brains'),
 }
+
+// =============================================================================
+// Plato (quiz) types
+// =============================================================================
+
+export type QuizFormat = 'multiple_choice' | 'free_recall' | 'flashcard'
+export type QuizVerdict = 'correct' | 'partial' | 'incorrect'
+
+/** What a session should draw on. Recency is anchored to note updated_at. */
+export interface QuizScope {
+  class_ids?: Array<string>
+  /** Take this many notes, most recently updated first. */
+  note_limit?: number | null
+  /** Only consider notes updated within this many days. */
+  since_days?: number | null
+  /** Explicit selection, overriding note_limit and since_days. */
+  note_ids?: Array<string> | null
+}
+
+export interface QuizSessionCreate extends QuizScope {
+  question_count?: number | null
+}
+
+export interface QuizSourceNote {
+  id: string
+  title: string
+  class_id: string | null
+  class_name: string | null
+  updated_at: string
+  char_count: number
+}
+
+export interface QuizSourcePreview {
+  notes: Array<QuizSourceNote>
+  pdf_count: number
+  assignment_count: number
+  exam_count: number
+  total_source_chars: number
+  sufficient: boolean
+  message: string | null
+}
+
+/** A question as the client sees it — the answer fields are stripped server-side. */
+export interface QuizQuestion {
+  id: string
+  format: QuizFormat
+  prompt: string
+  choices: Array<string> | null
+  concept: string
+  class_id: string | null
+  source_note_id: string | null
+}
+
+/** The back of a flashcard, fetched so you can mark yourself. */
+export interface QuizReveal {
+  question_id: string
+  model_answer: string
+}
+
+export interface QuizAnswerSubmit {
+  question_id: string
+  choice_index?: number | null
+  text?: string | null
+  self_grade?: QuizVerdict | null
+}
+
+export interface QuizAnswerResult {
+  question_id: string
+  verdict: QuizVerdict
+  explanation: string
+  model_answer: string
+  correct_choice_index: number | null
+  self_graded: boolean
+}
+
+export interface QuizSession {
+  id: string
+  class_ids: Array<string>
+  source_note_ids: Array<string>
+  status: 'in_progress' | 'completed'
+  questions: Array<QuizQuestion>
+  responses: Array<QuizAnswerResult>
+  created_at: string
+  completed_at: string | null
+}
+
+export interface QuizConceptScore {
+  concept: string
+  correct: number
+  total: number
+}
+
+export interface QuizSessionSummary {
+  session_id: string
+  total: number
+  correct: number
+  partial: number
+  incorrect: number
+  concepts: Array<QuizConceptScore>
+  brain_update_queued: boolean
+}
+
+// =============================================================================
+// Plato API
+// =============================================================================
+
+export const quizApi = {
+  previewSources: (scope: QuizScope) =>
+    api.post<QuizSourcePreview>('/quiz/sources', scope),
+
+  createSession: (data: QuizSessionCreate) =>
+    api.post<QuizSession>('/quiz/sessions', data),
+
+  getSession: (id: string) => api.get<QuizSession>(`/quiz/sessions/${id}`),
+
+  submitAnswer: (sessionId: string, answer: QuizAnswerSubmit) =>
+    api.post<QuizAnswerResult>(`/quiz/sessions/${sessionId}/answers`, answer),
+
+  /** Flashcards only — the server refuses this for gradeable formats. */
+  reveal: (sessionId: string, questionId: string) =>
+    api.post<QuizReveal>(`/quiz/sessions/${sessionId}/reveal`, {
+      question_id: questionId,
+    }),
+
+  complete: (sessionId: string) =>
+    api.post<QuizSessionSummary>(`/quiz/sessions/${sessionId}/complete`),
+}
+
+// =============================================================================
+// Brains API
+// =============================================================================
+
+/** Brains outlive odin, so they have their own router rather than living under /chat. */
+export interface Brain {
+  id: string
+  content: string
+  update_count: number
+  brain_type: 'global' | 'class' | 'quiz'
+  class_id: string | null
+  updated_at: string
+}
+
+export const brainsApi = {
+  list: () => api.get<Array<Brain>>('/brains/'),
+
+  getGlobal: () => api.get<Brain>('/brains/global'),
+
+  getClass: (classId: string, brainType: 'class' | 'quiz' = 'class') =>
+    api.get<Brain>(`/brains/class/${classId}?brain_type=${brainType}`),
+
+  update: (brainId: string, content: string) =>
+    api.put<Brain>(`/brains/${brainId}`, { content }),
+}

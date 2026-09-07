@@ -33,7 +33,7 @@ const navItems = [
   { to: '/dashboard/budget', icon: Wallet, label: 'budget' },
 ]
 
-const odinNav = { to: '/dashboard/odin', icon: Eye, label: 'odin' } as const
+const platoNav = { to: '/dashboard/plato', icon: Eye, label: 'plato' } as const
 
 function DashboardLayout() {
   const { user, isLoading, isAuthenticated, logout } = useAuth()
@@ -121,10 +121,10 @@ function DashboardLayout() {
               ))}
             </div>
 
-            {/* Odin — visually distinct */}
+            {/* Plato — visually distinct */}
             <div className="mt-auto pt-3 pb-2 border-t border-border/30">
               <Link
-                to={odinNav.to}
+                to={platoNav.to}
                 onClick={() => setSidebarOpen(false)}
                 className="flex items-center gap-3 px-4 py-3 rounded-xl text-muted-foreground hover:text-foreground hover:bg-foreground/5 transition-colors"
                 activeProps={{
@@ -132,8 +132,8 @@ function DashboardLayout() {
                     'flex items-center gap-3 px-4 py-3 rounded-xl bg-foreground text-background hover:bg-foreground/90',
                 }}
               >
-                <odinNav.icon className="w-5 h-5" />
-                <span className="font-semibold tracking-wide">{odinNav.label}</span>
+                <platoNav.icon className="w-5 h-5" />
+                <span className="font-semibold tracking-wide">{platoNav.label}</span>
               </Link>
             </div>
           </nav>

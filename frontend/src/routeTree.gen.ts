@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DashboardIndexRouteImport } from './routes/dashboard/index'
+import { Route as DashboardPlatoRouteImport } from './routes/dashboard/plato'
 import { Route as DashboardPlanRouteImport } from './routes/dashboard/plan'
 import { Route as DashboardPdfsRouteImport } from './routes/dashboard/pdfs'
 import { Route as DashboardOdinRouteImport } from './routes/dashboard/odin'
@@ -43,6 +44,11 @@ const IndexRoute = IndexRouteImport.update({
 const DashboardIndexRoute = DashboardIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => DashboardRoute,
+} as any)
+const DashboardPlatoRoute = DashboardPlatoRouteImport.update({
+  id: '/plato',
+  path: '/plato',
   getParentRoute: () => DashboardRoute,
 } as any)
 const DashboardPlanRoute = DashboardPlanRouteImport.update({
@@ -145,6 +151,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/odin': typeof DashboardOdinRoute
   '/dashboard/pdfs': typeof DashboardPdfsRouteWithChildren
   '/dashboard/plan': typeof DashboardPlanRoute
+  '/dashboard/plato': typeof DashboardPlatoRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/dashboard/assignments/$assignmentId': typeof DashboardAssignmentsAssignmentIdRoute
   '/dashboard/classes/$classId': typeof DashboardClassesClassIdRoute
@@ -162,6 +169,7 @@ export interface FileRoutesByTo {
   '/dashboard/chat': typeof DashboardChatRoute
   '/dashboard/odin': typeof DashboardOdinRoute
   '/dashboard/plan': typeof DashboardPlanRoute
+  '/dashboard/plato': typeof DashboardPlatoRoute
   '/dashboard': typeof DashboardIndexRoute
   '/dashboard/assignments/$assignmentId': typeof DashboardAssignmentsAssignmentIdRoute
   '/dashboard/classes/$classId': typeof DashboardClassesClassIdRoute
@@ -185,6 +193,7 @@ export interface FileRoutesById {
   '/dashboard/odin': typeof DashboardOdinRoute
   '/dashboard/pdfs': typeof DashboardPdfsRouteWithChildren
   '/dashboard/plan': typeof DashboardPlanRoute
+  '/dashboard/plato': typeof DashboardPlatoRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/dashboard/assignments/$assignmentId': typeof DashboardAssignmentsAssignmentIdRoute
   '/dashboard/classes/$classId': typeof DashboardClassesClassIdRoute
@@ -209,6 +218,7 @@ export interface FileRouteTypes {
     | '/dashboard/odin'
     | '/dashboard/pdfs'
     | '/dashboard/plan'
+    | '/dashboard/plato'
     | '/dashboard/'
     | '/dashboard/assignments/$assignmentId'
     | '/dashboard/classes/$classId'
@@ -226,6 +236,7 @@ export interface FileRouteTypes {
     | '/dashboard/chat'
     | '/dashboard/odin'
     | '/dashboard/plan'
+    | '/dashboard/plato'
     | '/dashboard'
     | '/dashboard/assignments/$assignmentId'
     | '/dashboard/classes/$classId'
@@ -248,6 +259,7 @@ export interface FileRouteTypes {
     | '/dashboard/odin'
     | '/dashboard/pdfs'
     | '/dashboard/plan'
+    | '/dashboard/plato'
     | '/dashboard/'
     | '/dashboard/assignments/$assignmentId'
     | '/dashboard/classes/$classId'
@@ -285,6 +297,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/dashboard/'
       preLoaderRoute: typeof DashboardIndexRouteImport
+      parentRoute: typeof DashboardRoute
+    }
+    '/dashboard/plato': {
+      id: '/dashboard/plato'
+      path: '/plato'
+      fullPath: '/dashboard/plato'
+      preLoaderRoute: typeof DashboardPlatoRouteImport
       parentRoute: typeof DashboardRoute
     }
     '/dashboard/plan': {
@@ -473,6 +492,7 @@ interface DashboardRouteChildren {
   DashboardOdinRoute: typeof DashboardOdinRoute
   DashboardPdfsRoute: typeof DashboardPdfsRouteWithChildren
   DashboardPlanRoute: typeof DashboardPlanRoute
+  DashboardPlatoRoute: typeof DashboardPlatoRoute
   DashboardIndexRoute: typeof DashboardIndexRoute
 }
 
@@ -486,6 +506,7 @@ const DashboardRouteChildren: DashboardRouteChildren = {
   DashboardOdinRoute: DashboardOdinRoute,
   DashboardPdfsRoute: DashboardPdfsRouteWithChildren,
   DashboardPlanRoute: DashboardPlanRoute,
+  DashboardPlatoRoute: DashboardPlatoRoute,
   DashboardIndexRoute: DashboardIndexRoute,
 }
 
