@@ -7,7 +7,9 @@ serializes questions through QuizQuestionStored.to_read(), which strips them.
 
 import asyncio
 import logging
+from collections.abc import Coroutine
 from datetime import datetime, timezone
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, status
@@ -44,6 +46,19 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 router = APIRouter(prefix="/quiz", tags=["quiz"])
+
+# asyncio holds only a weak reference to a running task, so a fire-and-forget
+# create_task can be garbage collected mid-flight. The brain update spends ten
+# seconds in an API call, which is a wide window to lose it in. Hold a strong
+# reference until it finishes.
+_background_tasks: set[asyncio.Task[None]] = set()
+
+
+def _spawn(coro: Coroutine[Any, Any, None]) -> None:
+    """Run a coroutine in the background without it being collected."""
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
 
 async def _update_quiz_brains_background(
@@ -395,7 +410,7 @@ async def complete_session(
     # Nothing answered means nothing worth writing to the brain.
     queue_update = bool(responses) and not already_complete
     if queue_update:
-        asyncio.create_task(_update_quiz_brains_background(user.id, session.id))
+        _spawn(_update_quiz_brains_background(user.id, session.id))
 
     return QuizSessionSummary(
         session_id=session.id,
