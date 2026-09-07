@@ -626,15 +626,6 @@ export interface ConversationUpdateContextRequest {
   context_note_ids?: string[]
 }
 
-export interface BrainResponse {
-  content: string
-  update_count: number
-  brain_type: 'global' | 'class'
-  class_id: string | null
-  last_updated_by_conversation_id: string | null
-  updated_at: string
-}
-
 export const weeklyPlanApi = {
   get: () => api.get<WeeklyPlan | null>('/weekly-plan'),
 
@@ -751,12 +742,6 @@ export const chatApi = {
       `/chat/conversations/${conversationId}/update-brain`
     ),
 
-  getGlobalBrain: () => api.get<BrainResponse>('/chat/brains/global'),
-
-  getClassBrain: (classId: string) =>
-    api.get<BrainResponse>(`/chat/brains/class/${classId}`),
-
-  listBrains: () => api.get<BrainResponse[]>('/chat/brains'),
 }
 
 // =============================================================================

@@ -14,9 +14,11 @@ import {
   XCircle,
   Clock,
   Upload,
+  Eye,
 } from 'lucide-react'
 
 import { classesApi, notesApi, pdfApi, type NoteCreate, type PDF } from '../../../lib/api'
+import { BrainPanel } from '@/components/brain-panel'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -241,6 +243,17 @@ function ClassDetailPage() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Plato — mastery record for this class, plus a way in */}
+      <div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-start">
+        <BrainPanel classId={classId} brainType="quiz" />
+        <Link to="/dashboard/plato" className="lg:self-stretch">
+          <Button variant="outline" className="gap-2 lowercase w-full lg:h-full">
+            <Eye className="w-4 h-4" />
+            quiz this class
+          </Button>
+        </Link>
       </div>
 
       {/* Notes section - full width editor with dropdown */}

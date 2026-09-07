@@ -15,10 +15,8 @@ import { Route as DashboardIndexRouteImport } from './routes/dashboard/index'
 import { Route as DashboardPlatoRouteImport } from './routes/dashboard/plato'
 import { Route as DashboardPlanRouteImport } from './routes/dashboard/plan'
 import { Route as DashboardPdfsRouteImport } from './routes/dashboard/pdfs'
-import { Route as DashboardOdinRouteImport } from './routes/dashboard/odin'
 import { Route as DashboardNotesRouteImport } from './routes/dashboard/notes'
 import { Route as DashboardClassesRouteImport } from './routes/dashboard/classes'
-import { Route as DashboardChatRouteImport } from './routes/dashboard/chat'
 import { Route as DashboardBudgetRouteImport } from './routes/dashboard/budget'
 import { Route as DashboardBoardRouteImport } from './routes/dashboard/board'
 import { Route as DashboardAssignmentsRouteImport } from './routes/dashboard/assignments'
@@ -61,11 +59,6 @@ const DashboardPdfsRoute = DashboardPdfsRouteImport.update({
   path: '/pdfs',
   getParentRoute: () => DashboardRoute,
 } as any)
-const DashboardOdinRoute = DashboardOdinRouteImport.update({
-  id: '/odin',
-  path: '/odin',
-  getParentRoute: () => DashboardRoute,
-} as any)
 const DashboardNotesRoute = DashboardNotesRouteImport.update({
   id: '/notes',
   path: '/notes',
@@ -74,11 +67,6 @@ const DashboardNotesRoute = DashboardNotesRouteImport.update({
 const DashboardClassesRoute = DashboardClassesRouteImport.update({
   id: '/classes',
   path: '/classes',
-  getParentRoute: () => DashboardRoute,
-} as any)
-const DashboardChatRoute = DashboardChatRouteImport.update({
-  id: '/chat',
-  path: '/chat',
   getParentRoute: () => DashboardRoute,
 } as any)
 const DashboardBudgetRoute = DashboardBudgetRouteImport.update({
@@ -145,10 +133,8 @@ export interface FileRoutesByFullPath {
   '/dashboard/assignments': typeof DashboardAssignmentsRouteWithChildren
   '/dashboard/board': typeof DashboardBoardRoute
   '/dashboard/budget': typeof DashboardBudgetRoute
-  '/dashboard/chat': typeof DashboardChatRoute
   '/dashboard/classes': typeof DashboardClassesRouteWithChildren
   '/dashboard/notes': typeof DashboardNotesRouteWithChildren
-  '/dashboard/odin': typeof DashboardOdinRoute
   '/dashboard/pdfs': typeof DashboardPdfsRouteWithChildren
   '/dashboard/plan': typeof DashboardPlanRoute
   '/dashboard/plato': typeof DashboardPlatoRoute
@@ -166,8 +152,6 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/dashboard/board': typeof DashboardBoardRoute
   '/dashboard/budget': typeof DashboardBudgetRoute
-  '/dashboard/chat': typeof DashboardChatRoute
-  '/dashboard/odin': typeof DashboardOdinRoute
   '/dashboard/plan': typeof DashboardPlanRoute
   '/dashboard/plato': typeof DashboardPlatoRoute
   '/dashboard': typeof DashboardIndexRoute
@@ -187,10 +171,8 @@ export interface FileRoutesById {
   '/dashboard/assignments': typeof DashboardAssignmentsRouteWithChildren
   '/dashboard/board': typeof DashboardBoardRoute
   '/dashboard/budget': typeof DashboardBudgetRoute
-  '/dashboard/chat': typeof DashboardChatRoute
   '/dashboard/classes': typeof DashboardClassesRouteWithChildren
   '/dashboard/notes': typeof DashboardNotesRouteWithChildren
-  '/dashboard/odin': typeof DashboardOdinRoute
   '/dashboard/pdfs': typeof DashboardPdfsRouteWithChildren
   '/dashboard/plan': typeof DashboardPlanRoute
   '/dashboard/plato': typeof DashboardPlatoRoute
@@ -212,10 +194,8 @@ export interface FileRouteTypes {
     | '/dashboard/assignments'
     | '/dashboard/board'
     | '/dashboard/budget'
-    | '/dashboard/chat'
     | '/dashboard/classes'
     | '/dashboard/notes'
-    | '/dashboard/odin'
     | '/dashboard/pdfs'
     | '/dashboard/plan'
     | '/dashboard/plato'
@@ -233,8 +213,6 @@ export interface FileRouteTypes {
     | '/'
     | '/dashboard/board'
     | '/dashboard/budget'
-    | '/dashboard/chat'
-    | '/dashboard/odin'
     | '/dashboard/plan'
     | '/dashboard/plato'
     | '/dashboard'
@@ -253,10 +231,8 @@ export interface FileRouteTypes {
     | '/dashboard/assignments'
     | '/dashboard/board'
     | '/dashboard/budget'
-    | '/dashboard/chat'
     | '/dashboard/classes'
     | '/dashboard/notes'
-    | '/dashboard/odin'
     | '/dashboard/pdfs'
     | '/dashboard/plan'
     | '/dashboard/plato'
@@ -320,13 +296,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardPdfsRouteImport
       parentRoute: typeof DashboardRoute
     }
-    '/dashboard/odin': {
-      id: '/dashboard/odin'
-      path: '/odin'
-      fullPath: '/dashboard/odin'
-      preLoaderRoute: typeof DashboardOdinRouteImport
-      parentRoute: typeof DashboardRoute
-    }
     '/dashboard/notes': {
       id: '/dashboard/notes'
       path: '/notes'
@@ -339,13 +308,6 @@ declare module '@tanstack/react-router' {
       path: '/classes'
       fullPath: '/dashboard/classes'
       preLoaderRoute: typeof DashboardClassesRouteImport
-      parentRoute: typeof DashboardRoute
-    }
-    '/dashboard/chat': {
-      id: '/dashboard/chat'
-      path: '/chat'
-      fullPath: '/dashboard/chat'
-      preLoaderRoute: typeof DashboardChatRouteImport
       parentRoute: typeof DashboardRoute
     }
     '/dashboard/budget': {
@@ -486,10 +448,8 @@ interface DashboardRouteChildren {
   DashboardAssignmentsRoute: typeof DashboardAssignmentsRouteWithChildren
   DashboardBoardRoute: typeof DashboardBoardRoute
   DashboardBudgetRoute: typeof DashboardBudgetRoute
-  DashboardChatRoute: typeof DashboardChatRoute
   DashboardClassesRoute: typeof DashboardClassesRouteWithChildren
   DashboardNotesRoute: typeof DashboardNotesRouteWithChildren
-  DashboardOdinRoute: typeof DashboardOdinRoute
   DashboardPdfsRoute: typeof DashboardPdfsRouteWithChildren
   DashboardPlanRoute: typeof DashboardPlanRoute
   DashboardPlatoRoute: typeof DashboardPlatoRoute
@@ -500,10 +460,8 @@ const DashboardRouteChildren: DashboardRouteChildren = {
   DashboardAssignmentsRoute: DashboardAssignmentsRouteWithChildren,
   DashboardBoardRoute: DashboardBoardRoute,
   DashboardBudgetRoute: DashboardBudgetRoute,
-  DashboardChatRoute: DashboardChatRoute,
   DashboardClassesRoute: DashboardClassesRouteWithChildren,
   DashboardNotesRoute: DashboardNotesRouteWithChildren,
-  DashboardOdinRoute: DashboardOdinRoute,
   DashboardPdfsRoute: DashboardPdfsRouteWithChildren,
   DashboardPlanRoute: DashboardPlanRoute,
   DashboardPlatoRoute: DashboardPlatoRoute,

@@ -12,7 +12,6 @@ from app.api.deps import CurrentUser, DbSession, get_user_resource_or_404
 from app.db.models import (
     ChatConversation,
     ChatMessage,
-    BrainMemory,
     Class,
     Assignment,
     PDF,
@@ -25,7 +24,6 @@ from app.schemas.chat import (
     ConversationListResponse,
     ChatMessageRequest,
     ChatMessageResponse,
-    BrainResponse,
     ConversationUpdateContextRequest,
 )
 from app.config import sanitize_error
@@ -475,36 +473,3 @@ async def manually_update_brain(
 
     return {"status": "updated", "brains": updated_brains}
 
-
-@router.get("/brains/global", response_model=BrainResponse)
-async def get_global_brain(
-    db: DbSession,
-    user: CurrentUser,
-):
-    """Get global brain content (user-wide knowledge)."""
-    brain = await brain_manager.get_or_create_brain(db, user.id, None)
-    return BrainResponse.model_validate(brain)
-
-
-@router.get("/brains/class/{class_id}", response_model=BrainResponse)
-async def get_class_brain(
-    class_id: UUID,
-    db: DbSession,
-    user: CurrentUser,
-):
-    """Get class-specific brain content."""
-    brain = await brain_manager.get_or_create_brain(db, user.id, class_id)
-    return BrainResponse.model_validate(brain)
-
-
-@router.get("/brains", response_model=list[BrainResponse])
-async def list_brains(
-    db: DbSession,
-    user: CurrentUser,
-):
-    """List all brains for the user (global + all class brains)."""
-    stmt = select(BrainMemory).where(BrainMemory.user_id == user.id)
-    result = await db.execute(stmt)
-    brains = result.scalars().all()
-
-    return [BrainResponse.model_validate(brain) for brain in brains]
