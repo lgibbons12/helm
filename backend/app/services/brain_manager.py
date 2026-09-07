@@ -4,6 +4,7 @@ import asyncio
 import logging
 from uuid import UUID
 from anthropic import AsyncAnthropic, APIConnectionError, RateLimitError, APIStatusError
+from anthropic.types import Message, TextBlock
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,6 +25,19 @@ QUIZ_BRAIN_TEMPLATE = """## strong concepts
 
 ## recent sessions
 """
+
+
+def _first_text(message: Message) -> str:
+    """
+    Pull the first text block out of a response.
+
+    Not content[0]: newer models put a thinking block first, and indexing
+    blindly raises AttributeError on it.
+    """
+    for block in message.content:
+        if isinstance(block, TextBlock):
+            return block.text
+    raise ValueError("No text block in response")
 
 
 async def _retry_anthropic(coro_factory, *, max_attempts: int = 3, base_delay: float = 1.0):
@@ -253,7 +267,7 @@ Current record:
                 )
             )
 
-            updated_content = message.content[0].text.strip()
+            updated_content = _first_text(message).strip()
 
             # Belt and braces: the prompt asks for a budget, this enforces it.
             if len(updated_content) > max_chars:

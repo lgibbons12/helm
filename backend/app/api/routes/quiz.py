@@ -5,28 +5,77 @@ server-side so model answers never reach the browser. Every response here
 serializes questions through QuizQuestionStored.to_read(), which strips them.
 """
 
+import asyncio
 import logging
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, status
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.api.deps import CurrentUser, DbSession, get_user_resource_or_404
 from app.config import get_settings, sanitize_error
 from app.db.models import QuizSession
+from app.db.session import AsyncSessionLocal
 from app.schemas.quiz import (
+    QuizAnswerResult,
+    QuizAnswerSubmit,
     QuizScope,
     QuizSessionCreate,
     QuizSessionRead,
+    QuizSessionSummary,
     QuizSourcePreview,
     stored_questions,
 )
-from app.services import quiz_service
-from app.services.quiz_service import build_context, build_preview, resolve_sources
+from app.services import brain_manager, quiz_service
+from app.services.quiz_service import (
+    build_context,
+    build_preview,
+    build_session_summary,
+    resolve_sources,
+    score_session,
+)
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
 router = APIRouter(prefix="/quiz", tags=["quiz"])
+
+
+async def _update_quiz_brains_background(
+    user_id: UUID,
+    session_id: UUID,
+) -> None:
+    """
+    Fold a finished session into the quiz brain of every class it touched.
+
+    Opens its own session because the request that triggered it has already
+    returned. Mirrors _update_brains_background in chat.py.
+    """
+    try:
+        async with AsyncSessionLocal() as db:
+            session = await db.get(QuizSession, session_id)
+            if session is None or session.user_id != user_id:
+                return
+
+            questions = stored_questions(session.questions)
+            responses = [QuizAnswerResult.model_validate(r) for r in session.responses]
+
+            # A question with no class cannot be attributed to a brain.
+            class_ids = {q.class_id for q in questions if q.class_id}
+            for class_id in class_ids:
+                summary = build_session_summary(questions, responses, class_id)
+                if not summary.strip():
+                    continue
+                try:
+                    brain = await brain_manager.get_or_create_brain(
+                        db, user_id, class_id, brain_type="quiz"
+                    )
+                    await brain_manager.update_quiz_brain(db, brain, summary)
+                except Exception:
+                    logger.exception("Quiz brain update failed for class %s", class_id)
+    except Exception:
+        logger.exception("Background quiz brain update failed for %s", session_id)
 
 
 def _to_read(session: QuizSession) -> QuizSessionRead:
@@ -80,6 +129,7 @@ async def create_session(
 
     context, note_ids = await build_context(db, user.id, resolved)
     count = payload.question_count or settings.quiz_default_question_count
+    note_class_ids = {n.id: n.class_id for n in resolved.notes}
 
     try:
         questions = await quiz_service.generate_questions(
@@ -87,6 +137,7 @@ async def create_session(
             note_ids=note_ids,
             class_ids=resolved.class_ids,
             count=count,
+            note_class_ids=note_class_ids,
         )
     except Exception as exc:
         logger.exception("Quiz generation failed for user %s", user.id)
@@ -125,3 +176,129 @@ async def get_session(
     """Resume a session. Progress survives a refresh because it lives here."""
     session = await get_user_resource_or_404(db, QuizSession, session_id, user.id)
     return _to_read(session)
+
+
+@router.post("/sessions/{session_id}/answers", response_model=QuizAnswerResult)
+async def submit_answer(
+    session_id: UUID,
+    payload: QuizAnswerSubmit,
+    db: DbSession,
+    user: CurrentUser,
+) -> QuizAnswerResult:
+    """
+    Answer one question and get it graded immediately.
+
+    Multiple choice and flashcards cost nothing -- the first is decided by the
+    stored index, the second by your own call. Only free recall goes to the
+    model, and even then a self_grade overrides it, because you are the one who
+    knows whether you actually knew it.
+    """
+    session = await get_user_resource_or_404(db, QuizSession, session_id, user.id)
+
+    if session.status == "completed":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="this session is already finished",
+        )
+
+    questions = {q.id: q for q in stored_questions(session.questions)}
+    question = questions.get(payload.question_id)
+    if question is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="no such question in this session",
+        )
+
+    self_graded = False
+
+    if payload.self_grade is not None:
+        # Covers flashcards, and a disagreement with the model on free recall.
+        verdict = payload.self_grade
+        explanation = "graded by you."
+        self_graded = True
+
+    elif question.format == "multiple_choice":
+        if payload.choice_index is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="pick an option",
+            )
+        correct = payload.choice_index == question.correct_choice_index
+        verdict = "correct" if correct else "incorrect"
+        explanation = question.model_answer
+
+    elif question.format == "free_recall":
+        if not payload.text:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="write an answer first",
+            )
+        verdict, explanation = await quiz_service.grade_free_recall(
+            question, payload.text
+        )
+
+    else:  # flashcard without a self_grade
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="mark the flashcard yourself",
+        )
+
+    result = QuizAnswerResult(
+        question_id=question.id,
+        verdict=verdict,
+        explanation=explanation,
+        model_answer=question.model_answer,
+        correct_choice_index=question.correct_choice_index,
+        self_graded=self_graded,
+    )
+
+    # Replace any earlier response for this question, so an override wins
+    # rather than being recorded twice.
+    responses = [r for r in session.responses if r.get("question_id") != question.id]
+    responses.append(result.model_dump(mode="json"))
+    session.responses = responses
+    # JSONB reassignment is not always seen as dirty by the ORM.
+    flag_modified(session, "responses")
+
+    await db.commit()
+    return result
+
+
+@router.post("/sessions/{session_id}/complete", response_model=QuizSessionSummary)
+async def complete_session(
+    session_id: UUID,
+    db: DbSession,
+    user: CurrentUser,
+) -> QuizSessionSummary:
+    """
+    Finish a session and queue the brain update.
+
+    The brain rewrite is a model call, so it runs in the background -- you get
+    your results immediately and the mastery record catches up behind you.
+    """
+    session = await get_user_resource_or_404(db, QuizSession, session_id, user.id)
+
+    questions = stored_questions(session.questions)
+    responses = [QuizAnswerResult.model_validate(r) for r in session.responses]
+    tally, concepts = score_session(questions, responses)
+
+    already_complete = session.status == "completed"
+    if not already_complete:
+        session.status = "completed"
+        session.completed_at = datetime.now(timezone.utc)
+        await db.commit()
+
+    # Nothing answered means nothing worth writing to the brain.
+    queue_update = bool(responses) and not already_complete
+    if queue_update:
+        asyncio.create_task(_update_quiz_brains_background(user.id, session.id))
+
+    return QuizSessionSummary(
+        session_id=session.id,
+        total=tally["total"],
+        correct=tally["correct"],
+        partial=tally["partial"],
+        incorrect=tally["incorrect"],
+        concepts=concepts,
+        brain_update_queued=queue_update,
+    )

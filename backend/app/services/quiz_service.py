@@ -23,6 +23,8 @@ from sqlalchemy.orm import selectinload
 from app.config import get_settings
 from app.db.models import PDF, Assignment, Class, Exam, Note
 from app.schemas.quiz import (
+    QuizAnswerResult,
+    QuizConceptScore,
     QuizQuestionStored,
     QuizScope,
     QuizSourceNote,
@@ -405,6 +407,7 @@ class QuizService:
         note_ids: list[UUID],
         class_ids: list[UUID],
         count: int,
+        note_class_ids: dict[UUID, UUID | None] | None = None,
     ) -> list[QuizQuestionStored]:
         """
         Generate a mixed question set in one call.
@@ -468,7 +471,93 @@ Rules:
         )
 
         raw = _extract_tool_input(message, "emit_questions")
-        return _build_questions(raw.get("questions", []), note_ids, class_ids)
+        return _build_questions(
+            raw.get("questions", []), note_ids, class_ids, note_class_ids or {}
+        )
+
+    async def grade_free_recall(
+        self,
+        question: QuizQuestionStored,
+        answer: str,
+    ) -> tuple[str, str]:
+        """
+        Grade one written answer against the model answer.
+
+        Returns (verdict, explanation). Falls back to a neutral partial rather
+        than raising -- a grading outage should not strand you mid-session with
+        no way forward.
+        """
+        system_prompt = """You grade a student's recall answer against a model \
+answer.
+
+Judge the substance, not the wording. A student who has the right idea in their
+own words is correct. A student who has part of it, or has it with a real error,
+is partial. Do not reward keyword matching, and do not punish informality.
+
+Be specific in the explanation: name what they got and what they missed. Write
+in lowercase, addressed to them directly."""
+
+        user_content = (
+            f"question:\n{question.prompt}\n\n"
+            f"model answer:\n{question.model_answer}\n\n"
+            f"student answer:\n{answer}"
+        )
+
+        try:
+            message = await _retry_anthropic(
+                lambda: self.client.messages.create(
+                    model=self.model,
+                    max_tokens=settings.quiz_grading_max_tokens,
+                    system=system_prompt,
+                    tools=[_GRADING_TOOL],
+                    tool_choice=_FORCE_GRADE,
+                    messages=[{"role": "user", "content": user_content}],
+                )
+            )
+            result = _extract_tool_input(message, "grade_answer")
+            verdict = result.get("verdict")
+            if verdict not in ("correct", "partial", "incorrect"):
+                raise ValueError(f"bad verdict {verdict!r}")
+            explanation = (result.get("explanation") or "").strip()
+            return verdict, explanation
+
+        except Exception:
+            logger.exception("Grading failed for question %s", question.id)
+            return (
+                "partial",
+                "grading is unavailable right now, so this one is left "
+                "unscored. compare your answer against the one shown.",
+            )
+
+
+_GRADING_TOOL: ToolParam = {
+    "name": "grade_answer",
+    "description": "Return the grade for the student's answer.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "verdict": {
+                "type": "string",
+                "enum": ["correct", "partial", "incorrect"],
+                "description": (
+                    "correct: the substance is right, wording aside. "
+                    "partial: some of the idea, with a real gap or error. "
+                    "incorrect: the idea is missing or wrong."
+                ),
+            },
+            "explanation": {
+                "type": "string",
+                "description": (
+                    "Two or three sentences addressed to the student, saying "
+                    "what they got and what they missed. Lowercase."
+                ),
+            },
+        },
+        "required": ["verdict", "explanation"],
+    },
+}
+
+_FORCE_GRADE: ToolChoiceToolParam = {"type": "tool", "name": "grade_answer"}
 
 
 def _extract_tool_input(message: Any, tool_name: str) -> dict[str, Any]:
@@ -486,6 +575,7 @@ def _build_questions(
     raw_questions: list[dict[str, Any]],
     note_ids: list[UUID],
     class_ids: list[UUID],
+    note_class_ids: dict[UUID, UUID | None],
 ) -> list[QuizQuestionStored]:
     """Validate and normalize generated questions into stored form."""
     built: list[QuizQuestionStored] = []
@@ -535,6 +625,14 @@ def _build_questions(
         if isinstance(source_ref, int) and 1 <= source_ref <= len(note_ids):
             source_note_id = note_ids[source_ref - 1]
 
+        # Attribute the question to a class via its source note, so a
+        # cross-class session can still route results to the right brain.
+        # Falling back to the only class in scope covers questions drawn from a
+        # document, which carry no note reference.
+        class_id = note_class_ids.get(source_note_id) if source_note_id else None
+        if class_id is None and len(class_ids) == 1:
+            class_id = class_ids[0]
+
         built.append(
             QuizQuestionStored(
                 id=str(uuid.uuid4()),
@@ -544,7 +642,7 @@ def _build_questions(
                 correct_choice_index=correct_index,
                 model_answer=model_answer,
                 concept=(raw.get("concept") or "general").strip().lower(),
-                class_id=class_ids[0] if len(class_ids) == 1 else None,
+                class_id=class_id,
                 source_note_id=source_note_id,
             )
         )
@@ -553,3 +651,89 @@ def _build_questions(
 
 
 quiz_service = QuizService()
+
+
+# =============================================================================
+# SESSION SUMMARY
+# =============================================================================
+
+
+def score_session(
+    questions: list[QuizQuestionStored],
+    responses: list[QuizAnswerResult],
+) -> tuple[dict[str, int], list[QuizConceptScore]]:
+    """
+    Tally a session overall and per concept.
+
+    Only answered questions count. Walking away halfway should not read as a
+    string of wrong answers in the mastery record.
+    """
+    by_id = {q.id: q for q in questions}
+    tally = {"total": 0, "correct": 0, "partial": 0, "incorrect": 0}
+    per_concept: dict[str, dict[str, int]] = {}
+
+    for response in responses:
+        question = by_id.get(response.question_id)
+        if question is None:
+            continue
+        tally["total"] += 1
+        tally[response.verdict] = tally.get(response.verdict, 0) + 1
+
+        bucket = per_concept.setdefault(question.concept, {"correct": 0, "total": 0})
+        bucket["total"] += 1
+        # Partial credit counts as correct for the concept tally; the brain
+        # prompt sees the finer detail in the transcript.
+        if response.verdict == "correct":
+            bucket["correct"] += 1
+
+    concepts = [
+        QuizConceptScore(concept=name, correct=v["correct"], total=v["total"])
+        for name, v in sorted(per_concept.items())
+    ]
+    return tally, concepts
+
+
+def build_session_summary(
+    questions: list[QuizQuestionStored],
+    responses: list[QuizAnswerResult],
+    class_id: UUID | None = None,
+) -> str:
+    """
+    Render a completed session as markdown for the brain update.
+
+    Built here rather than by the model: the facts are already known, and
+    spending a call to restate them would only add a chance to get them wrong.
+    """
+    if class_id is not None:
+        questions = [q for q in questions if q.class_id == class_id]
+
+    answered_ids = {q.id for q in questions}
+    responses = [r for r in responses if r.question_id in answered_ids]
+
+    tally, concepts = score_session(questions, responses)
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    lines = [
+        f"session on {today}: {tally['correct']} correct, "
+        f"{tally['partial']} partial, {tally['incorrect']} incorrect "
+        f"out of {tally['total']} answered",
+        "",
+    ]
+
+    by_id = {q.id: q for q in questions}
+    for response in responses:
+        question = by_id.get(response.question_id)
+        if question is None:
+            continue
+        marker = {"correct": "+", "partial": "~", "incorrect": "-"}[response.verdict]
+        lines.append(f"{marker} [{question.concept}] {question.prompt}")
+        if response.verdict != "correct":
+            lines.append(f"    missed: {response.explanation}")
+
+    if concepts:
+        lines.append("")
+        lines.append("per concept: " + ", ".join(
+            f"{c.concept} {c.correct}/{c.total}" for c in concepts
+        ))
+
+    return "\n".join(lines)
