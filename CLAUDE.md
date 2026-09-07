@@ -37,8 +37,8 @@ pnpm dlx shadcn@latest add <component>  # Add shadcn component
 ## Architecture
 
 ### Backend (`backend/app/`)
-- **Entry:** `main.py` — FastAPI app with lifespan, CORS, 11 routers
-- **Routes:** `api/routes/` — auth, classes, assignments, exams, notes, time_blocks, transactions, budget, weekly_plans, pdfs, chat
+- **Entry:** `main.py` — FastAPI app with lifespan, CORS, 13 routers
+- **Routes:** `api/routes/` — auth, classes, assignments, exams, notes, time_blocks, transactions, budget, weekly_plans, pdfs, chat, quiz, brains
 - **Auth:** `api/deps.py` — JWT in HttpOnly cookies (localStorage fallback). `CurrentUser` dependency for user-scoped queries. `verify_ownership_or_404()` for privacy-preserving access checks
 - **Models:** `db/models.py` — All SQLAlchemy models, UUID PKs, `TIMESTAMP(timezone=True)`, CITEXT emails
 - **Schemas:** `schemas/` — Pydantic schemas per domain, all extend `BaseSchema` with `from_attributes=True`
@@ -50,7 +50,7 @@ pnpm dlx shadcn@latest add <component>  # Add shadcn component
 - **API Client:** `lib/api.ts` — typed `get<T>()`, `post<T>()`, `put<T>()`, `patch<T>()`, `delete<T>()` methods with `credentials: 'include'`; all TypeScript types co-located here
 - **Auth:** `lib/auth.tsx` — AuthProvider context, `useAuth()` hook, query key `['auth', 'user']`
 - **State:** TanStack React Query with key prefixes like `['transactions', ...]` and invalidation cascades on mutations
-- **Pages:** `routes/dashboard/` — assignments, classes, notes, pdfs, chat, budget, board, plan, odin
+- **Pages:** `routes/dashboard/` — assignments, classes, notes, pdfs, budget, board, plan, plato
 - **UI:** shadcn/ui (Radix) + Tailwind CSS, lucide-react icons, lowercase text style, `glass-card` class
 
 ### Database
@@ -67,7 +67,12 @@ pnpm dlx shadcn@latest add <component>  # Add shadcn component
 - `EXPENSE_CATEGORIES` constant is defined in both `backend/app/schemas/budget.py` and `frontend/src/lib/api.ts` — keep in sync
 - Category colors are in `frontend/src/routes/dashboard/budget.tsx` (`CATEGORY_COLORS` map)
 - Semesters are `"<season> <year>"` strings sorted chronologically, not alphabetically. The season order lives in both `frontend/src/lib/semester.ts` and `backend/app/api/routes/classes.py` — keep them in sync
-- Anthropic Claude API used for chat/PDF features (model configured in `config.py`)
+- Anthropic Claude API used for quiz/chat/PDF features. `llm_model` drives chat and PDF; `quiz_model` drives Plato, which needs a stronger model for generation and grading
+- Plato (quizzing) lives at `routes/dashboard/plato.tsx` with `services/quiz_service.py`. It builds its own context **notes-first** rather than reusing `chat_service.build_context()`, which adds PDFs before notes against a shared budget and can starve them
+- Quiz context is tagged (`<note>`, `<document>`, `<mastery_record>`, `<background>`, `<coursework>`). Only `<note>` and `<document>` are material to quiz from; the rest steer weighting. Untagged markdown headings let the model quiz from brain content
+- Brain memories are `global`, `class`, or `quiz`. `brain_type` is an unconstrained string, so new types need no migration. Read/edit via the `/brains` router, not `/chat`
+- Anthropic responses may lead with a thinking block — never index `message.content[0]`. `brain_manager._first_text()` walks the blocks; `update_brain_after_conversation` still indexes blindly and will break if `llm_model` is bumped
+- Quiz answers live server-side in `quiz_sessions.questions`; routes serialize through `QuizQuestionStored.to_read()` to strip them
 
 ## Deployment
 
