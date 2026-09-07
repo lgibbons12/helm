@@ -4,7 +4,9 @@ import { useQuery } from '@tanstack/react-query'
 import { Plus, ExternalLink, User, BookOpen, FileText } from 'lucide-react'
 
 import { classesApi, type Class } from '../../../lib/api'
-import { compareSemestersDesc } from '@/lib/semester'
+import { groupBySemester } from '@/lib/semester'
+import { useSemesterExpansion } from '@/lib/use-semester-expansion'
+import { SemesterSection } from '@/components/semester-section'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -63,32 +65,29 @@ function ClassesPage() {
 }
 
 function ClassesGrid({ classes }: { classes: Class[] }) {
-  // Group classes by semester
-  const bySemester = classes.reduce(
-    (acc, cls) => {
-      if (!acc[cls.semester]) {
-        acc[cls.semester] = []
-      }
-      acc[cls.semester].push(cls)
-      return acc
-    },
-    {} as Record<string, Class[]>
+  const { isSemesterExpanded, toggleSemester } = useSemesterExpansion(
+    'helm_classes_semester_expansion'
   )
 
-  // Sort semesters chronologically (most recent first)
-  const semesters = Object.keys(bySemester).sort(compareSemestersDesc)
+  // Semesters run most recent first; classes keep the API's name ordering
+  const semesterGroups = groupBySemester(classes, (cls) => cls.semester)
 
   return (
     <div className="space-y-8">
-      {semesters.map((semester) => (
-        <div key={semester} className="space-y-4">
-          <h2 className="text-lg font-semibold text-foreground lowercase">{semester}</h2>
+      {semesterGroups.map(({ semester, items }) => (
+        <SemesterSection
+          key={semester}
+          semester={semester}
+          count={items.length}
+          isExpanded={isSemesterExpanded(semester)}
+          onToggle={() => toggleSemester(semester)}
+        >
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {bySemester[semester].map((cls) => (
+            {items.map((cls) => (
               <ClassCard key={cls.id} classData={cls} />
             ))}
           </div>
-        </div>
+        </SemesterSection>
       ))}
     </div>
   )

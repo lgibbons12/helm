@@ -13,6 +13,9 @@ import {
 import { formatDistanceToNow } from 'date-fns'
 
 import { notesApi, classesApi, assignmentsApi, type Note, type Class, type Assignment } from '../lib/api'
+import { groupBySemester } from '@/lib/semester'
+import { useSemesterExpansion } from '@/lib/use-semester-expansion'
+import { SemesterSection } from '@/components/semester-section'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 
@@ -28,8 +31,18 @@ interface TreeNode {
   type: 'class' | 'assignment' | 'standalone' | 'note'
   id: string
   name: string
+  /** Set on class nodes only; drives the semester grouping. */
+  semester?: string
   notes?: Note[]
   children?: TreeNode[]
+}
+
+/** Total notes on a node, including those hanging off its children. */
+function countNotes(node: TreeNode): number {
+  return (
+    (node.notes?.length ?? 0) +
+    (node.children?.reduce((total, child) => total + (child.notes?.length ?? 0), 0) ?? 0)
+  )
 }
 
 // =============================================================================
@@ -39,6 +52,9 @@ interface TreeNode {
 export function NotesTree({ searchQuery = '' }: NotesTreeProps) {
   const navigate = useNavigate()
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set())
+  const { isSemesterExpanded, toggleSemester } = useSemesterExpansion(
+    'helm_notes_semester_expansion'
+  )
 
   // Fetch all data
   const { data: notes, isLoading: notesLoading } = useQuery({
@@ -73,7 +89,11 @@ export function NotesTree({ searchQuery = '' }: NotesTreeProps) {
 
   // Build tree structure
   const treeData = useMemo(() => {
-    if (!filteredNotes || !classes || !assignments) return []
+    if (!filteredNotes || !classes || !assignments)
+      return {
+        classNodes: [] as Array<TreeNode>,
+        standaloneNode: null as TreeNode | null,
+      }
 
     const classMap = new Map<string, Class>()
     classes.forEach((c) => classMap.set(c.id, c))
@@ -105,7 +125,7 @@ export function NotesTree({ searchQuery = '' }: NotesTreeProps) {
       }
     })
 
-    const tree: TreeNode[] = []
+    const classNodes: Array<TreeNode> = []
 
     // Build class nodes
     classes.forEach((cls) => {
@@ -127,28 +147,36 @@ export function NotesTree({ searchQuery = '' }: NotesTreeProps) {
 
       // Only include class if it has notes or assignments with notes
       if (classNotes.length > 0 || assignmentNodes.length > 0) {
-        tree.push({
+        classNodes.push({
           type: 'class',
           id: `class-${cls.id}`,
           name: cls.name,
+          semester: cls.semester,
           notes: classNotes,
           children: assignmentNodes,
         })
       }
     })
 
-    // Add standalone section if there are standalone notes
-    if (standaloneNotes.length > 0) {
-      tree.push({
-        type: 'standalone',
-        id: 'standalone',
-        name: 'standalone notes',
-        notes: standaloneNotes,
-      })
-    }
+    // Standalone notes belong to no class, so they sit outside the semesters
+    const standaloneNode: TreeNode | null =
+      standaloneNotes.length > 0
+        ? {
+            type: 'standalone',
+            id: 'standalone',
+            name: 'standalone notes',
+            notes: standaloneNotes,
+          }
+        : null
 
-    return tree
+    return { classNodes, standaloneNode }
   }, [filteredNotes, classes, assignments])
+
+  const { classNodes, standaloneNode } = treeData
+  const semesterGroups = groupBySemester(
+    classNodes,
+    (node) => node.semester ?? 'no semester'
+  )
 
   const toggleNode = (nodeId: string) => {
     setExpandedNodes((prev) => {
@@ -170,7 +198,7 @@ export function NotesTree({ searchQuery = '' }: NotesTreeProps) {
     return <NotesTreeLoading />
   }
 
-  if (treeData.length === 0) {
+  if (classNodes.length === 0 && !standaloneNode) {
     return (
       <div className="p-6 text-center">
         <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center mx-auto mb-3">
@@ -183,19 +211,32 @@ export function NotesTree({ searchQuery = '' }: NotesTreeProps) {
     )
   }
 
+  const renderNode = (node: TreeNode) => (
+    <TreeNodeComponent
+      key={node.id}
+      node={node}
+      isExpanded={expandedNodes.has(node.id)}
+      onToggle={() => toggleNode(node.id)}
+      onNoteClick={handleNoteClick}
+      expandedNodes={expandedNodes}
+      onToggleChild={toggleNode}
+    />
+  )
+
   return (
-    <div className="space-y-2 pb-4">
-      {treeData.map((node) => (
-        <TreeNodeComponent
-          key={node.id}
-          node={node}
-          isExpanded={expandedNodes.has(node.id)}
-          onToggle={() => toggleNode(node.id)}
-          onNoteClick={handleNoteClick}
-          expandedNodes={expandedNodes}
-          onToggleChild={toggleNode}
-        />
+    <div className="space-y-4 pb-4">
+      {semesterGroups.map(({ semester, items }) => (
+        <SemesterSection
+          key={semester}
+          semester={semester}
+          count={items.reduce((total, node) => total + countNotes(node), 0)}
+          isExpanded={isSemesterExpanded(semester)}
+          onToggle={() => toggleSemester(semester)}
+        >
+          <div className="space-y-2">{items.map(renderNode)}</div>
+        </SemesterSection>
       ))}
+      {standaloneNode && <div className="space-y-2">{renderNode(standaloneNode)}</div>}
     </div>
   )
 }
@@ -225,7 +266,7 @@ function TreeNodeComponent({
 }: TreeNodeComponentProps) {
   const hasChildren = node.children && node.children.length > 0
   const hasNotes = node.notes && node.notes.length > 0
-  const noteCount = (node.notes?.length || 0) + (node.children?.reduce((acc, child) => acc + (child.notes?.length || 0), 0) || 0)
+  const noteCount = countNotes(node)
 
   const getIcon = () => {
     switch (node.type) {

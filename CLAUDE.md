@@ -66,6 +66,7 @@ pnpm dlx shadcn@latest add <component>  # Add shadcn component
 - Frontend API types and methods are all in `lib/api.ts` — add new types there
 - `EXPENSE_CATEGORIES` constant is defined in both `backend/app/schemas/budget.py` and `frontend/src/lib/api.ts` — keep in sync
 - Category colors are in `frontend/src/routes/dashboard/budget.tsx` (`CATEGORY_COLORS` map)
+- Semesters are `"<season> <year>"` strings sorted chronologically, not alphabetically. The season order lives in both `frontend/src/lib/semester.ts` and `backend/app/api/routes/classes.py` — keep them in sync
 - Anthropic Claude API used for chat/PDF features (model configured in `config.py`)
 
 ## Deployment

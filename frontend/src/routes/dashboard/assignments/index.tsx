@@ -28,6 +28,9 @@ import {
   type DayOfWeek,
   type AssignmentType,
 } from '../../../lib/api'
+import { groupBySemester } from '@/lib/semester'
+import { useSemesterExpansion } from '@/lib/use-semester-expansion'
+import { SemesterSection } from '@/components/semester-section'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -151,6 +154,35 @@ function AssignmentsPage() {
   // Group assignments by class
   const assignmentsByClass = groupByClass(filteredAssignments, classes)
 
+  // Nest the class groups under their semester; the "no class" bucket has none
+  const classGroups = assignmentsByClass.filter(
+    (group): group is ClassGroup & { class: Class } => group.class !== null
+  )
+  const noClassGroup = assignmentsByClass.find((group) => group.class === null)
+  const semesterGroups = groupBySemester(classGroups, (group) => group.class.semester)
+
+  const { isSemesterExpanded, toggleSemester } = useSemesterExpansion(
+    'helm_assignments_semester_expansion'
+  )
+
+  const renderClassSection = (group: ClassGroup) => (
+    <ClassSection
+      key={group.class?.id || 'no-class'}
+      classData={group.class}
+      assignments={group.assignments}
+      expandedId={expandedId}
+      isAddingNew={addingForClass === (group.class?.id || 'no-class')}
+      onToggleExpand={(id) => setExpandedId(expandedId === id ? null : id)}
+      onNavigate={(id) => navigate({ to: '/dashboard/assignments/$assignmentId', params: { assignmentId: id }, search: { from: 'assignments' } })}
+      onStartAdd={() => setAddingForClass(group.class?.id || 'no-class')}
+      onCancelAdd={() => setAddingForClass(null)}
+      onSaveNew={(data) => createAssignment.mutate(data)}
+      onUpdate={(id, data) => updateAssignment.mutate({ id, data })}
+      onDelete={setDeleteTarget}
+      isSaving={createAssignment.isPending || updateAssignment.isPending}
+    />
+  )
+
   // Count active assignments
   const activeCount = assignments.filter((a) => a.status !== 'finished').length
 
@@ -190,24 +222,25 @@ function AssignmentsPage() {
       ) : assignmentsError ? (
         <AssignmentsError error={assignmentsError as Error} />
       ) : classes.length > 0 ? (
-        <div className="space-y-4">
-          {assignmentsByClass.map((group) => (
-            <ClassSection
-              key={group.class?.id || 'no-class'}
-              classData={group.class}
-              assignments={group.assignments}
-              expandedId={expandedId}
-              isAddingNew={addingForClass === (group.class?.id || 'no-class')}
-              onToggleExpand={(id) => setExpandedId(expandedId === id ? null : id)}
-              onNavigate={(id) => navigate({ to: '/dashboard/assignments/$assignmentId', params: { assignmentId: id }, search: { from: 'assignments' } })}
-              onStartAdd={() => setAddingForClass(group.class?.id || 'no-class')}
-              onCancelAdd={() => setAddingForClass(null)}
-              onSaveNew={(data) => createAssignment.mutate(data)}
-              onUpdate={(id, data) => updateAssignment.mutate({ id, data })}
-              onDelete={setDeleteTarget}
-              isSaving={createAssignment.isPending || updateAssignment.isPending}
-            />
+        <div className="space-y-6">
+          {semesterGroups.map(({ semester, items }) => (
+            <SemesterSection
+              key={semester}
+              semester={semester}
+              count={items.reduce(
+                (total, group) =>
+                  total + group.assignments.filter((a) => a.status !== 'finished').length,
+                0
+              )}
+              isExpanded={isSemesterExpanded(semester)}
+              onToggle={() => toggleSemester(semester)}
+            >
+              <div className="space-y-4">{items.map(renderClassSection)}</div>
+            </SemesterSection>
           ))}
+          {noClassGroup && (
+            <div className="space-y-4">{renderClassSection(noClassGroup)}</div>
+          )}
         </div>
       ) : (
         <AssignmentsEmpty />

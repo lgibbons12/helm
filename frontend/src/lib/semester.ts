@@ -14,6 +14,34 @@ export function semesterSortKey(semester: string): number {
   return Number(match[2]) * 10 + SEASON_ORDER.indexOf(season)
 }
 
+/**
+ * The semester that `date` falls in: winter (jan-feb), spring (mar-may),
+ * summer (jun-aug), fall (sep-dec).
+ */
+export function currentSemester(date: Date = new Date()): string {
+  const month = date.getMonth()
+  const season =
+    month <= 1
+      ? 'winter'
+      : month <= 4
+        ? 'spring'
+        : month <= 7
+          ? 'summer'
+          : 'fall'
+  return `${season} ${date.getFullYear()}`
+}
+
+/** True when `semester` finished before the one we are currently in. */
+export function isPastSemester(
+  semester: string,
+  date: Date = new Date(),
+): boolean {
+  const key = semesterSortKey(semester)
+  // Unrecognized values stay visible rather than getting hidden by default
+  if (key < 0) return false
+  return key < semesterSortKey(currentSemester(date))
+}
+
 /** Compare two semesters chronologically, most recent first. */
 export function compareSemestersDesc(a: string, b: string): number {
   const keyA = semesterSortKey(a)
@@ -23,7 +51,10 @@ export function compareSemestersDesc(a: string, b: string): number {
 }
 
 /** Build the semester options for a picker, most recent first. */
-export function generateSemesters(yearsBack = 1, yearsForward = 1): Array<string> {
+export function generateSemesters(
+  yearsBack = 1,
+  yearsForward = 1,
+): Array<string> {
   const currentYear = new Date().getFullYear()
   const semesters: Array<string> = []
 
@@ -38,4 +69,35 @@ export function generateSemesters(yearsBack = 1, yearsForward = 1): Array<string
   }
 
   return semesters
+}
+
+/** A set of items sharing one semester. */
+export interface SemesterGroup<T> {
+  semester: string
+  items: Array<T>
+}
+
+/**
+ * Bucket items by semester, ordered most recent first.
+ * Order within each bucket is preserved from the input.
+ */
+export function groupBySemester<T>(
+  items: Array<T>,
+  getSemester: (item: T) => string,
+): Array<SemesterGroup<T>> {
+  const groups = new Map<string, Array<T>>()
+
+  for (const item of items) {
+    const semester = getSemester(item)
+    const existing = groups.get(semester)
+    if (existing) {
+      existing.push(item)
+    } else {
+      groups.set(semester, [item])
+    }
+  }
+
+  return Array.from(groups.keys())
+    .sort(compareSemestersDesc)
+    .map((semester) => ({ semester, items: groups.get(semester) ?? [] }))
 }

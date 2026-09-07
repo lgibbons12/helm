@@ -1,5 +1,6 @@
 """Class/Course CRUD routes."""
 
+import re
 from uuid import UUID
 
 from fastapi import APIRouter, status
@@ -10,6 +11,23 @@ from app.db.models import Class
 from app.schemas.classes import ClassCreate, ClassRead, ClassUpdate
 
 router = APIRouter(prefix="/classes", tags=["classes"])
+
+# Seasons within a calendar year, earliest first. Mirrors SEASON_ORDER in
+# frontend/src/lib/semester.ts -- keep the two in sync.
+SEASON_ORDER = ("winter", "spring", "summer", "fall")
+
+SEMESTER_PATTERN = re.compile(r"^\s*(winter|spring|summer|fall)\s+(\d{4})\s*$", re.IGNORECASE)
+
+
+def semester_sort_key(semester: str) -> int:
+    """Chronological sort key for a "<season> <year>" semester string.
+
+    Returns -1 for values that do not match the expected shape so they sort last.
+    """
+    match = SEMESTER_PATTERN.match(semester)
+    if not match:
+        return -1
+    return int(match.group(2)) * 10 + SEASON_ORDER.index(match.group(1).lower())
 
 
 @router.get("/", response_model=list[ClassRead])
@@ -22,10 +40,15 @@ async def list_classes(
     query = select(Class).where(Class.user_id == current_user.id)
     if semester:
         query = query.where(Class.semester == semester)
-    query = query.order_by(Class.semester.desc(), Class.name)
-    
+
     result = await db.execute(query)
-    return [ClassRead.model_validate(c) for c in result.scalars()]
+    # Sorted here rather than in SQL because "fall 2026" orders chronologically,
+    # not alphabetically; a single user's class list is small enough for this.
+    classes = sorted(
+        result.scalars(),
+        key=lambda c: (-semester_sort_key(c.semester), c.name.lower()),
+    )
+    return [ClassRead.model_validate(c) for c in classes]
 
 
 @router.post("/", response_model=ClassRead, status_code=status.HTTP_201_CREATED)
