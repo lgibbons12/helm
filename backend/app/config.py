@@ -116,6 +116,7 @@ class Settings(BaseSettings):
     quiz_model: str = "claude-sonnet-5"
     quiz_generation_max_tokens: int = 8000
     quiz_grading_max_tokens: int = 1000
+    quiz_guide_max_tokens: int = 8000
     # Quiz context is assembled notes-first with its own budget, rather than
     # reusing the chat ordering where large PDFs can crowd notes out entirely.
     quiz_max_total_context_chars: int = 60000

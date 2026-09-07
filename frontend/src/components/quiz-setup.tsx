@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { AlertTriangle, FileText, Sparkles } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 
+import { useNavigate } from '@tanstack/react-router'
 import type { Class, QuizScope } from '@/lib/api'
-import { classesApi, quizApi } from '@/lib/api'
+
+import { ApiError, classesApi, quizApi } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -36,6 +38,8 @@ export function QuizSetup({ onStart, isStarting, startError }: QuizSetupProps) {
   const [questionCount, setQuestionCount] = useState(10)
   const [includeStandalone, setIncludeStandalone] = useState(false)
   const [excluded, setExcluded] = useState<Set<string>>(new Set())
+  const [guideError, setGuideError] = useState<string | null>(null)
+  const navigate = useNavigate()
 
   const { data: classes = [] } = useQuery({
     queryKey: ['classes'],
@@ -73,14 +77,28 @@ export function QuizSetup({ onStart, isStarting, startError }: QuizSetupProps) {
     })
   }
 
-  const start = () => {
-    // Send an explicit selection only when something was actually deselected.
-    const finalScope: QuizScope =
-      excluded.size > 0
-        ? { ...scope, note_ids: included.map((n) => n.id) }
-        : scope
-    onStart(finalScope, questionCount)
-  }
+  // Send an explicit selection only when something was actually deselected.
+  const finalScope = (): QuizScope =>
+    excluded.size > 0
+      ? { ...scope, note_ids: included.map((n) => n.id) }
+      : scope
+
+  const start = () => onStart(finalScope(), questionCount)
+
+  const guide = useMutation({
+    mutationFn: () => quizApi.createStudyGuide(finalScope()),
+    onSuccess: (note) => {
+      setGuideError(null)
+      // The guide is a real note, so it lives in the tree like any other.
+      navigate({ to: '/dashboard/notes/$noteId', params: { noteId: note.id } })
+    },
+    onError: (error: unknown) =>
+      setGuideError(
+        error instanceof ApiError
+          ? error.message
+          : 'could not write the guide. try again.',
+      ),
+  })
 
   return (
     <div className="space-y-6">
@@ -242,7 +260,7 @@ export function QuizSetup({ onStart, isStarting, startError }: QuizSetupProps) {
 
       <Button
         onClick={start}
-        disabled={!canStart || isStarting}
+        disabled={!canStart || isStarting || guide.isPending}
         size="lg"
         className="w-full gap-2 lowercase"
       >
@@ -250,9 +268,26 @@ export function QuizSetup({ onStart, isStarting, startError }: QuizSetupProps) {
         {isStarting ? 'writing your questions...' : 'start session'}
       </Button>
 
-      {isStarting && (
+      {/* Same scope, different output: read it instead of being tested on it. */}
+      <div className="text-center space-y-2">
+        <button
+          type="button"
+          onClick={() => guide.mutate()}
+          disabled={!canStart || isStarting || guide.isPending}
+          className="text-xs text-muted-foreground hover:text-foreground lowercase underline underline-offset-4 disabled:opacity-40 disabled:no-underline"
+        >
+          {guide.isPending
+            ? 'writing your study guide...'
+            : 'or write a study guide from the same notes'}
+        </button>
+        {guideError && (
+          <p className="text-xs text-rose-600 lowercase">{guideError}</p>
+        )}
+      </div>
+
+      {(isStarting || guide.isPending) && (
         <p className="text-center text-xs text-muted-foreground lowercase">
-          questions are written fresh each time, so this takes a few seconds
+          written fresh from your notes, so this takes a few seconds
         </p>
       )}
     </div>

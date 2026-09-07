@@ -9,6 +9,7 @@ is your own notes.
 
 import json
 import logging
+import random
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -30,7 +31,7 @@ from app.schemas.quiz import (
     QuizSourceNote,
     QuizSourcePreview,
 )
-from app.services.brain_manager import _retry_anthropic, brain_manager
+from app.services.brain_manager import _first_text, _retry_anthropic, brain_manager
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -490,6 +491,63 @@ Rules:
             raw.get("questions", []), note_ids, class_ids, note_class_ids or {}
         )
 
+    async def generate_study_guide(self, context: str, class_name: str) -> str:
+        """
+        Write a study guide over the same material a session would draw on.
+
+        Plain markdown rather than tool-use: the output is prose meant to be
+        read and edited, and it is saved as a Note, so structure beyond
+        headings would only get in the way.
+        """
+        system_prompt = f"""You write a study guide for a student from their own \
+course material for {class_name}.
+
+The context is tagged, and the tags are not interchangeable:
+- <note> and <document> are THE MATERIAL. The guide covers these and nothing
+  else. Never introduce a fact the material does not contain.
+- <mastery_record> is what the student is currently strong and weak at. Give
+  more room and worked detail to the weak concepts. It is not material.
+- <background> and <coursework> steer emphasis only.
+
+Write markdown with these sections:
+
+## the short version
+Three or four sentences on what this material is actually about.
+
+## key ideas
+The main concepts, one subsection each. Define the idea, then say why it holds
+or when it applies -- not just what it is called.
+
+## worth a second look
+Concepts the mastery record flags as weak, explained again from a different
+angle than the notes use. Skip this section if the record is empty.
+
+## connections
+How these ideas relate to each other, and to anything earlier in the material.
+
+## gaps in your notes
+Anything the material clearly skims or leaves dangling, so the student knows
+what to go back and fill in. Be specific and honest; say nothing if the notes
+are complete.
+
+Write in lowercase, matching the app's voice. Be substantive -- this replaces
+re-reading the notes, so it must be worth reading instead of them. Do not pad."""
+
+        message = await _retry_anthropic(
+            lambda: self.client.messages.create(
+                model=self.model,
+                max_tokens=settings.quiz_guide_max_tokens,
+                system=system_prompt,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": f"Write the study guide.\n\n{context}",
+                    }
+                ],
+            )
+        )
+        return _first_text(message).strip()
+
     async def grade_free_recall(
         self,
         question: QuizQuestionStored,
@@ -627,6 +685,15 @@ def _build_questions(
             # model_answer is recoverable -- no reason to throw the question away.
             if not model_answer:
                 model_answer = choices[correct_index]
+
+            # The model overwhelmingly emits the correct option first, which
+            # makes every question answerable without reading it. Shuffle here
+            # rather than asking the prompt not to: position then carries no
+            # signal at all, instead of less signal.
+            order = list(range(len(choices)))
+            random.shuffle(order)
+            choices = [choices[i] for i in order]
+            correct_index = order.index(correct_index)
         else:
             choices = None
             correct_index = None

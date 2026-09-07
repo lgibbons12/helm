@@ -14,17 +14,19 @@ from fastapi import APIRouter, HTTPException, status
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.api.deps import CurrentUser, DbSession, get_user_resource_or_404
+from app.api.routes.notes import note_to_read
 from app.config import get_settings, sanitize_error
-from app.db.models import QuizSession
+from app.db.models import Note, QuizSession
 from app.db.session import AsyncSessionLocal
+from app.schemas.notes import NoteRead
 from app.schemas.quiz import (
     QuizAnswerResult,
     QuizAnswerSubmit,
+    QuizReveal,
+    QuizRevealRequest,
     QuizScope,
     QuizSessionCreate,
     QuizSessionRead,
-    QuizReveal,
-    QuizRevealRequest,
     QuizSessionSummary,
     QuizSourcePreview,
     stored_questions,
@@ -107,6 +109,72 @@ async def preview_sources(
     """
     resolved = await resolve_sources(db, user.id, scope)
     return build_preview(resolved)
+
+
+@router.post(
+    "/study-guide", response_model=NoteRead, status_code=status.HTTP_201_CREATED
+)
+async def create_study_guide(
+    payload: QuizScope,
+    db: DbSession,
+    user: CurrentUser,
+) -> NoteRead:
+    """
+    Write a study guide over a scope and save it as a note on the class.
+
+    Saved as a Note rather than its own model so it lands in the tree, is
+    searchable, is editable when it gets something wrong, and can itself be
+    quizzed later.
+    """
+    resolved = await resolve_sources(db, user.id, payload)
+
+    preview = build_preview(resolved)
+    if not preview.sufficient:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=preview.message or "not enough material for a study guide",
+        )
+
+    # A guide belongs to one class -- it is a thing you sit down and read before
+    # one exam. Spanning classes would produce something no one studies from.
+    if len(resolved.classes) != 1:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "pick a single class for a study guide."
+                if len(resolved.classes) > 1
+                else "these notes aren't attached to a class."
+            ),
+        )
+
+    class_id, class_obj = next(iter(resolved.classes.items()))
+    context, _ = await build_context(db, user.id, resolved)
+
+    try:
+        content = await quiz_service.generate_study_guide(context, class_obj.name)
+    except Exception as exc:
+        logger.exception("Study guide generation failed for user %s", user.id)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=sanitize_error(exc, generic_message="could not write the guide"),
+        ) from exc
+
+    today = datetime.now(timezone.utc)
+    label = f"{today:%b} {today.day}"  # "sep 7", without platform-specific %-d
+    note = Note(
+        user_id=user.id,
+        class_id=class_id,
+        title=f"study guide: {class_obj.code or class_obj.name} ({label})".lower(),
+        content_text=content,
+        # Tagged so generated guides are filterable and never mistaken for
+        # something you wrote yourself.
+        tags=["plato", "study-guide"],
+    )
+    db.add(note)
+    await db.commit()
+    await db.refresh(note, ["class_", "assignment"])
+
+    return note_to_read(note)
 
 
 @router.post(

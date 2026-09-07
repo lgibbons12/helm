@@ -885,6 +885,10 @@ export const quizApi = {
   createSession: (data: QuizSessionCreate) =>
     api.post<QuizSession>('/quiz/sessions', data),
 
+  /** Writes a guide over the scope and saves it as a note on the class. */
+  createStudyGuide: (scope: QuizScope) =>
+    api.post<Note>('/quiz/study-guide', scope),
+
   getSession: (id: string) => api.get<QuizSession>(`/quiz/sessions/${id}`),
 
   submitAnswer: (sessionId: string, answer: QuizAnswerSubmit) =>
