@@ -1,4 +1,9 @@
-import { createFileRoute, Outlet, Link, useNavigate } from '@tanstack/react-router'
+import {
+  createFileRoute,
+  Outlet,
+  Link,
+  useNavigate,
+} from '@tanstack/react-router'
 import {
   Compass,
   BookOpen,
@@ -17,6 +22,7 @@ import {
 import { useState, useEffect } from 'react'
 
 import { useAuth } from '../lib/auth'
+import { PlatoPrompt } from '@/components/plato-prompt'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 
 export const Route = createFileRoute('/dashboard')({
@@ -91,7 +97,9 @@ function DashboardLayout() {
               <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
                 <Compass className="w-6 h-6 text-primary-foreground" />
               </div>
-              <span className="text-xl font-semibold text-foreground">helm</span>
+              <span className="text-xl font-semibold text-foreground">
+                helm
+              </span>
             </Link>
             <button
               onClick={() => setSidebarOpen(false)}
@@ -133,7 +141,9 @@ function DashboardLayout() {
                 }}
               >
                 <platoNav.icon className="w-5 h-5" />
-                <span className="font-semibold tracking-wide">{platoNav.label}</span>
+                <span className="font-semibold tracking-wide">
+                  {platoNav.label}
+                </span>
               </Link>
             </div>
           </nav>
@@ -194,6 +204,9 @@ function DashboardLayout() {
         </main>
       </div>
 
+      {/* Occasional nudge toward plato; self-suppresses when there is nothing
+          worth reviewing. */}
+      <PlatoPrompt />
     </div>
   )
 }
